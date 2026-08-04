@@ -126,7 +126,12 @@ pub trait ExOrd: Eq + PartialOrd + PointeeSized {
 
     fn max(self, other: Self) -> (r: Self)
         ensures
-            Self::obeys_cmp_spec() ==> match other.cmp_spec(&self) {
+            // The provided max is "if other < self { self } else { other }", which decides with
+            // PartialOrd rather than with Ord, and Rust only asks (it cannot enforce) that the
+            // two agree, so cmp_spec describes the result only where they do agree:
+            Self::obeys_cmp_spec() && Self::obeys_partial_cmp_spec()
+                && other.partial_cmp_spec(&self) == Some(other.cmp_spec(&self))
+                ==> match other.cmp_spec(&self) {
                 Ordering::Less => r == self,
                 Ordering::Equal => r == other,
                 Ordering::Greater => r == other,
@@ -142,7 +147,11 @@ pub trait ExOrd: Eq + PartialOrd + PointeeSized {
 
     fn min(self, other: Self) -> (r: Self)
         ensures
-            Self::obeys_cmp_spec() ==> match other.cmp_spec(&self) {
+            // The provided min is "if other < self { other } else { self }", which decides with
+            // PartialOrd rather than with Ord, so as for max:
+            Self::obeys_cmp_spec() && Self::obeys_partial_cmp_spec()
+                && other.partial_cmp_spec(&self) == Some(other.cmp_spec(&self))
+                ==> match other.cmp_spec(&self) {
                 Ordering::Less => r == other,
                 Ordering::Equal => r == self,
                 Ordering::Greater => r == self,
@@ -165,7 +174,11 @@ pub trait ExOrd: Eq + PartialOrd + PointeeSized {
                 | Ordering::Equal,
             ),
         ensures
-            Self::obeys_cmp_spec() ==> match (self.cmp_spec(&min), self.cmp_spec(&max)) {
+            // The provided clamp is "if self < min { min } else if self > max { max } else
+            // { self }", which decides with PartialOrd rather than with Ord, so as for max:
+            Self::obeys_cmp_spec() && self.partial_cmp_spec(&min) == Some(self.cmp_spec(&min))
+                && self.partial_cmp_spec(&max) == Some(self.cmp_spec(&max))
+                ==> match (self.cmp_spec(&min), self.cmp_spec(&max)) {
                 (Ordering::Less, _) => r == min,
                 (_, Ordering::Greater) => r == max,
                 _ => r == self,
