@@ -331,6 +331,112 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
+    #[test] ptr_ref2_lifetime_error verus_code! {
+        use vstd::prelude::*;
+        use vstd::layout::*;
+        use vstd::raw_ptr::*;
+
+        fn test(ptr: *mut u64, Tracked(perm): Tracked<&mut PointsTo<u64>>)
+            requires
+                old(perm).ptr() == ptr,
+                old(perm).is_init(),
+            ensures
+                false,
+        {
+            broadcast use group_layout_axioms;
+
+            let sref = ptr_ref2(ptr, Tracked(&*perm));
+            proof {
+                let tracked stale = sref.points_to();
+                perm.is_disjoint::<u64>(stale);
+            }
+        }
+    } => Err(err) => assert_rust_error_msg(err, "cannot borrow `*perm` as mutable because it is also borrowed as immutable")
+}
+
+test_verify_one_file! {
+    #[test] ptr_ref2_static_lifetime_error verus_code! {
+        use vstd::prelude::*;
+        use vstd::layout::*;
+        use vstd::raw_ptr::*;
+
+        fn test(ptr: *mut u64, Tracked(perm): Tracked<&mut PointsTo<u64>>)
+            requires
+                old(perm).ptr() == ptr,
+                old(perm).is_init(),
+            ensures
+                false,
+        {
+            broadcast use group_layout_axioms;
+
+            let sref: SharedReference<'static, u64> = ptr_ref2(ptr, Tracked(&*perm));
+            proof {
+                let tracked stale = sref.points_to();
+                perm.is_disjoint::<u64>(stale);
+            }
+        }
+    } => Err(err) => assert_rust_error_msgs(err, &[
+        "lifetime may not live long enough",
+        "cannot borrow `*perm` as mutable because it is also borrowed as immutable",
+    ])
+}
+
+test_verify_one_file! {
+    #[test] ptr_ref2_ok verus_code! {
+        use vstd::prelude::*;
+        use vstd::raw_ptr::*;
+
+        fn test_shared_borrow(x: *mut u8, Tracked(pt): Tracked<&PointsTo<u8>>) {
+            assume(pt.ptr() == x);
+            assume(pt.is_init());
+
+            let sref = ptr_ref2(x as *const u8, Tracked(pt));
+
+            assert(sref.value() == pt.value());
+            assert(sref.ptr().addr() == x.addr());
+
+            proof {
+                let tracked pt2 = sref.points_to();
+                assert(pt2.is_init());
+                assert(pt2.ptr() == sref.ptr());
+                assert(pt2.value() == pt.value());
+            }
+        }
+
+        fn test_owned_permission(x: *mut u8, Tracked(pt): Tracked<PointsTo<u8>>) {
+            assume(pt.ptr() == x);
+            assume(pt.is_init());
+
+            let sref = ptr_ref2(x as *const u8, Tracked(&pt));
+
+            assert(sref.value() == pt.value());
+        }
+
+        fn test_returns_shared_reference<'a>(x: *const u8, Tracked(pt): Tracked<&'a PointsTo<u8>>) -> (v: SharedReference<'a, u8>)
+            requires
+                pt.ptr() == x,
+                pt.is_init(),
+            ensures
+                v.value() == pt.value(),
+        {
+            ptr_ref2(x, Tracked(pt))
+        }
+
+        fn test_permission_usable_again(x: *mut u8, Tracked(pt): Tracked<PointsTo<u8>>) {
+            let tracked mut pt = pt;
+            assume(pt.ptr() == x);
+            assume(pt.is_init());
+
+            let sref = ptr_ref2(x as *const u8, Tracked(&pt));
+            assert(sref.value() == pt.value());
+
+            let v = ptr_mut_read(x, Tracked(&mut pt));
+            assert(v == sref.value());
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
     #[test] compare_const_mut_pointers verus_code! {
         use vstd::prelude::*;
 
