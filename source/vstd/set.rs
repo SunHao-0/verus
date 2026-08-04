@@ -135,15 +135,20 @@ impl<A> Set<A> {
     }
 
     /// Set whose membership is determined by the given boolean predicate,
-    /// assuming the predicate produces a finite set.
+    /// if that predicate produces a finite set. (If it produces an infinite
+    /// set, this function returns an arbitrary finite set.) Unlike
+    /// [`Set::new`], this doesn't return an `Option`, so nothing can be
+    /// concluded about its contents without first establishing that the
+    /// predicate produces a finite set.
     ///
     /// Usage Examples:
     /// ```rust
     /// let set_a = Set::new_assuming_finite(|x : nat| x < 42);
     /// let set_b = Set::<A>::new_assuming_finite(|x| some_predicate(x));
-    /// assert(forall|x| some_predicate(x) <==> set_b.contains(x));
+    /// assert(ISet::new(|x| some_predicate(x)).finite() ==>
+    ///        forall|x| some_predicate(x) <==> set_b.contains(x));
     /// ```
-    #[deprecated(note = "Set::new_assuming_finite is helpful for incremental porting of existing code to the new version of Verus supporting finite sets. But it's dangerous since it assumes the given function describes a finite set.")]
+    #[deprecated(note = "Set::new_assuming_finite is helpful for incremental porting of existing code to the new version of Verus supporting finite sets. But reasoning about its contents still requires proving that the given function describes a finite set, so prefer Set::new.")]
     pub closed spec fn new_assuming_finite(f: spec_fn(A) -> bool) -> Set<A> {
         Self::make_set(ISet::new(f))
     }
@@ -345,16 +350,17 @@ pub broadcast proof fn lemma_set_new_some<A>(f: spec_fn(A) -> bool)
 
 }
 
-/// Shows that `Set::<A>::new_assuming_finite(f)` contains `a`
-/// if and only if `f(a)` is true.
+/// If `ISet::<A>::new(f)` is finite, then `Set::<A>::new_assuming_finite(f)`
+/// contains `a` if and only if `f(a)` is true.
 #[allow(deprecated)]
 pub broadcast proof fn lemma_set_new_assuming_finite<A>(f: spec_fn(A) -> bool, a: A)
+    requires
+        ISet::<A>::new(f).finite(),
     ensures
         #[trigger] Set::<A>::new_assuming_finite(f).contains(a) == f(a),
 {
     broadcast use Set::axiom_make_set;
 
-    assume(ISet::new(f).finite());  // This is the assumption
 }
 
 /// If an iset `s` is finite, then `Set::new_from_iset(s)` has the same

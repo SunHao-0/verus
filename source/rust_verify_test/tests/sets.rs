@@ -185,3 +185,60 @@ test_verify_one_file! {
         }
     } => Ok(())
 }
+
+test_verify_one_file! {
+    #[test] test_set_new_assuming_finite verus_code! {
+        use vstd::iset::*;
+        use vstd::iset_lib::*;
+        use vstd::set::*;
+
+        #[allow(deprecated)]
+        proof fn test(a: int) {
+            lemma_int_range(0, 42);
+            assert(ISet::new(|x: int| 0 <= x < 42) =~= set_int_range(0, 42));
+            let s = Set::<int>::new_assuming_finite(|x: int| 0 <= x < 42);
+            assert(s.contains(a) == (0 <= a < 42));
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] test_set_new_assuming_finite_infinite_fails verus_code! {
+        use vstd::set::*;
+
+        #[allow(deprecated)]
+        proof fn test(a: int) {
+            let s = Set::<int>::new_assuming_finite(|x: int| true);
+            assert(s.contains(a)); // FAILS
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
+    #[test] test_set_new_assuming_finite_false_fails verus_code! {
+        use vstd::iset_lib::*;
+        use vstd::set::*;
+
+        proof fn contradiction(s: Set<int>)
+            requires
+                forall|a: int| s.contains(a),
+            ensures
+                false,
+        {
+            lemma_to_iset_finite(s);
+            lemma_to_iset_len(s);
+            let n = s.len() as int;
+            lemma_int_range(0, n + 1);
+            assert(set_int_range(0, n + 1).subset_of(s.to_iset()));
+            lemma_len_subset(set_int_range(0, n + 1), s.to_iset());
+            assert(n + 1 <= n);
+        }
+
+        #[allow(deprecated)]
+        proof fn test() {
+            let s = Set::<int>::new_assuming_finite(|x: int| true);
+            contradiction(s); // FAILS
+            assert(false);
+        }
+    } => Err(err) => assert_one_fails(err)
+}
