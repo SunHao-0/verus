@@ -1636,6 +1636,92 @@ test_verify_one_file_with_options! {
 }
 
 test_verify_one_file_with_options! {
+    #[test] reqens2 ["vstd"] => verus_code! {
+        use vstd::prelude::*;
+        struct S;
+        impl ProofFnReqEnsDef<(u8,), int> for S {
+            open spec fn req(a: (u8,)) -> bool {
+                a.0 < 100
+            }
+            open spec fn ens(a: (u8,), o: int) -> bool {
+                o == a.0 + 1
+            }
+        }
+        proof fn q<F: ProofFn + ProofFnReqEns<S>>(tracked f: proof_fn<F>(u8) -> int)
+            ensures
+                forall|x: u8| x < 100 ==> #[trigger] f.requires((x,)),
+        {
+            let y = f(3);
+            assert(y == 4);
+        }
+        proof fn p() {
+            q(proof_fn[ReqEns<S>]|x| { x + 1 });
+        }
+    } => Ok(())
+}
+
+test_verify_one_file_with_options! {
+    #[test] reqens_paradox1 ["vstd"] => verus_code! {
+        use vstd::function::proof_fn_as_req_ens;
+        use vstd::prelude::*;
+
+        pub struct R;
+
+        pub struct Pos {
+            pub f: proof_fn<'static>[ReqEns<R>]() -> tracked Pos,
+        }
+
+        impl ProofFnReqEnsDef<(), Pos> for R {
+            open spec fn req(_a: ()) -> bool {
+                false
+            }
+            open spec fn ens(_a: (), o: Pos) -> bool {
+                !o.f.ensures((), o)
+            }
+        }
+
+        pub proof fn forge() -> (tracked g: proof_fn<'static>[ReqEns<R>]() -> tracked Pos) {
+            let tracked f = proof_fn|| -> (tracked r: Pos)
+                requires false,
+                ensures false,
+                { proof_from_false() };
+            proof_fn_as_req_ens::<R, _, _, _, _, _, _, _, _, _>(f)
+        }
+
+        pub proof fn boom() {
+            let tracked g = forge();
+            let o = Pos { f: g };
+            assert(!g.ensures((), o));
+            assert(false); // FAILS
+        }
+    } => Err(e) => assert_one_fails(e)
+}
+
+test_verify_one_file_with_options! {
+    #[test] reqens_paradox2 ["vstd"] => verus_code! {
+        use vstd::prelude::*;
+
+        pub struct R;
+
+        pub uninterp spec fn g() -> proof_fn<'static>[ReqEns<R>]() -> tracked bool;
+
+        impl ProofFnReqEnsDef<(), bool> for R {
+            open spec fn req(_a: ()) -> bool {
+                true
+            }
+            open spec fn ens(_a: (), o: bool) -> bool {
+                !g().ensures((), o)
+            }
+        }
+
+        pub proof fn boom() {
+            assert(!g().ensures((), true));
+            assert(false); // FAILS
+        }
+    } => Err(e) => assert_one_fails(e)
+}
+
+test_verify_one_file_with_options! {
     #[test] tracked_args1 ["vstd"] => verus_code! {
         use vstd::prelude::*;
         struct S;

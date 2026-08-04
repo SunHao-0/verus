@@ -89,7 +89,7 @@ pub broadcast axiom fn axiom_proof_fn_requires<
     <F as ProofFnReqEnsAssoc>::ReqEns: ProofFnReqEnsDef<Args, Output>,
 
     ensures
-        #[trigger] f.requires(args) <==> <F as ProofFnReqEnsAssoc>::ReqEns::req(args),
+        <F as ProofFnReqEnsAssoc>::ReqEns::req(args) ==> #[trigger] f.requires(args),
 ;
 
 #[doc(hidden)]
@@ -105,10 +105,7 @@ pub broadcast axiom fn axiom_proof_fn_ensures<
     <F as ProofFnReqEnsAssoc>::ReqEns: ProofFnReqEnsDef<Args, Output>,
 
     ensures
-        #[trigger] f.ensures(args, output) <==> <F as ProofFnReqEnsAssoc>::ReqEns::ens(
-            args,
-            output,
-        ),
+        #[trigger] f.ensures(args, output) ==> <F as ProofFnReqEnsAssoc>::ReqEns::ens(args, output),
 ;
 
 /// Retype a proof_fn, introducing `ReqEns<R>`
