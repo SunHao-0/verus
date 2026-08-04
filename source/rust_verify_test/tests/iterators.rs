@@ -481,3 +481,205 @@ test_verify_one_file! {
 
     } => Ok(())
 }
+
+test_verify_one_file! {
+    #[test] find_discharges_closure_requires verus_code! {
+        use vstd::prelude::*;
+        use vstd::std_specs::iter::IteratorSpec;
+
+        fn test(v: Vec<u8>)
+            requires forall |i| 0 <= i < v@.len() ==> #[trigger] v@[i] < 10,
+        {
+            let mut it = v.into_iter();
+            let r = it.find(
+                |x: &u8| -> (ret: bool)
+                    requires *x < 10,
+                    ensures ret == (*x < 5)
+                {*x < 5}
+            );
+            if let Some(x) = r {
+                assert(x < 5);
+            }
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] all_discharges_closure_requires verus_code! {
+        use vstd::prelude::*;
+        use vstd::std_specs::iter::IteratorSpec;
+
+        fn test(v: Vec<u8>)
+            requires forall |i| 0 <= i < v@.len() ==> #[trigger] v@[i] < 10,
+        {
+            let mut it = v.into_iter();
+            let r = it.all(
+                |x: u8| -> (ret: bool)
+                    requires x < 10,
+                    ensures ret == (x < 5)
+                {x < 5}
+            );
+            if r {
+                assert(forall |i| 0 <= i < v@.len() ==> #[trigger] v@[i] < 5);
+            }
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] any_discharges_closure_requires verus_code! {
+        use vstd::prelude::*;
+        use vstd::std_specs::iter::IteratorSpec;
+
+        fn test(v: Vec<u8>)
+            requires forall |i| 0 <= i < v@.len() ==> #[trigger] v@[i] < 10,
+        {
+            let mut it = v.into_iter();
+            let r = it.any(
+                |x: u8| -> (ret: bool)
+                    requires x < 10,
+                    ensures ret == (x < 5)
+                {x < 5}
+            );
+            if !r {
+                assert(forall |i| 0 <= i < v@.len() ==> #[trigger] v@[i] >= 5);
+            }
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] find_vacuous_closure verus_code! {
+        use vstd::prelude::*;
+        use vstd::std_specs::iter::IteratorSpec;
+
+        fn exploit(v: Vec<u8>)
+            requires v@ == seq![1u8],
+        {
+            let mut it = v.into_iter();
+            assert(it.remaining() =~= seq![1u8]);
+            let ghost it0 = it;
+            let p = |x: &u8| -> (r: bool)
+                requires *x == 7,
+                ensures *x == 7
+            {true};
+            let r = it.find(p); // FAILS
+            assert(it0.remaining()[0] == 1u8);
+            assert(false);
+        }
+    } => Err(e) => assert_one_fails(e)
+}
+
+test_verify_one_file! {
+    #[test] all_vacuous_closure verus_code! {
+        use vstd::prelude::*;
+        use vstd::std_specs::iter::IteratorSpec;
+
+        fn exploit(v: Vec<u8>)
+            requires v@ == seq![1u8],
+        {
+            let mut it = v.into_iter();
+            assert(it.remaining() =~= seq![1u8]);
+            let ghost it0 = it;
+            let f = |x: u8| -> (r: bool)
+                requires x == 7,
+                ensures x == 7
+            {true};
+            let r = it.all(f); // FAILS
+            assert(it0.remaining()[0] == 1u8);
+            assert(false);
+        }
+    } => Err(e) => assert_one_fails(e)
+}
+
+test_verify_one_file! {
+    #[test] any_vacuous_closure verus_code! {
+        use vstd::prelude::*;
+        use vstd::std_specs::iter::IteratorSpec;
+
+        fn exploit(v: Vec<u8>)
+            requires v@ == seq![1u8],
+        {
+            let mut it = v.into_iter();
+            assert(it.remaining() =~= seq![1u8]);
+            let ghost it0 = it;
+            let f = |x: u8| -> (r: bool)
+                requires x == 7,
+                ensures x == 7
+            {true};
+            let r = it.any(f); // FAILS
+            assert(it0.remaining()[0] == 1u8);
+            assert(false);
+        }
+    } => Err(e) => assert_one_fails(e)
+}
+
+const LAWLESS_ITERATOR: &str = verus_code_str! {
+    use vstd::prelude::*;
+    use vstd::std_specs::iter::*;
+
+    pub struct Lawless {
+        pub n: u8,
+    }
+
+    impl Iterator for Lawless {
+        type Item = u8;
+
+        fn next(&mut self) -> (r: Option<u8>) {
+            if self.n == 0 {
+                None
+            } else {
+                self.n = self.n - 1;
+                Some(self.n)
+            }
+        }
+    }
+
+    impl IteratorSpecImpl for Lawless {
+        open spec fn obeys_prophetic_iter_laws(&self) -> bool {
+            false
+        }
+
+        open spec fn remaining(&self) -> Seq<u8> {
+            Seq::empty()
+        }
+
+        open spec fn will_return_none(&self) -> bool {
+            true
+        }
+
+        open spec fn decrease(&self) -> Option<nat> {
+            None
+        }
+
+        open spec fn peek(&self, index: int) -> Option<u8> {
+            None
+        }
+    }
+};
+
+test_verify_one_file! {
+    #[test] lawless_iterator_accepts_total_closure LAWLESS_ITERATOR.to_string() + verus_code_str! {
+        fn test() {
+            let mut it = Lawless { n: 3 };
+            let r = it.all(
+                |x: u8| -> (ret: bool)
+                    ensures ret == (x < 5)
+                {x < 5}
+            );
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] lawless_iterator_rejects_partial_closure LAWLESS_ITERATOR.to_string() + verus_code_str! {
+        fn test() {
+            let mut it = Lawless { n: 3 };
+            let f = |x: u8| -> (ret: bool)
+                requires x == 7,
+                ensures x == 7
+            {true};
+            let r = it.all(f); // FAILS
+        }
+    } => Err(e) => assert_one_fails(e)
+}

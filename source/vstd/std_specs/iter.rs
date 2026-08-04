@@ -91,6 +91,16 @@ pub trait ExIterator {
     fn find<P>(&mut self, predicate: P) -> (r: Option<Self::Item>)
         where Self: Sized,
             P: FnMut(&Self::Item) -> bool
+        requires
+            // `predicate` is applied to a prefix of the items the iterator yields.
+            // When the iterator obeys the laws, those items are the elements of
+            // `remaining()`; otherwise nothing constrains them, so `predicate` has
+            // to accept every item.
+            old(self).obeys_prophetic_iter_laws() ==>
+                forall |i| 0 <= i < old(self).remaining().len() ==>
+                    #[trigger] predicate.requires((&old(self).remaining()[i],)),
+            !old(self).obeys_prophetic_iter_laws() ==>
+                forall |x: &Self::Item| #[trigger] predicate.requires((x,))
         default_ensures
             // The iterator consistently obeys, completes, and decreases throughout its lifetime
             final(self).obeys_prophetic_iter_laws() == old(self).obeys_prophetic_iter_laws(),
@@ -128,6 +138,16 @@ pub trait ExIterator {
     fn all<F>(&mut self, f: F) -> (r: bool)
         where Self: Sized,
             F: FnMut(Self::Item) -> bool
+        requires
+            // `f` is applied to a prefix of the items the iterator yields.
+            // When the iterator obeys the laws, those items are the elements of
+            // `remaining()`; otherwise nothing constrains them, so `f` has to
+            // accept every item.
+            old(self).obeys_prophetic_iter_laws() ==>
+                forall |i| 0 <= i < old(self).remaining().len() ==>
+                    #[trigger] f.requires((old(self).remaining()[i],)),
+            !old(self).obeys_prophetic_iter_laws() ==>
+                forall |x: Self::Item| #[trigger] f.requires((x,))
         default_ensures
             // The iterator consistently obeys, completes, and decreases throughout its lifetime
             final(self).obeys_prophetic_iter_laws() == old(self).obeys_prophetic_iter_laws(),
@@ -159,6 +179,16 @@ pub trait ExIterator {
     fn any<F>(&mut self, f: F) -> (r: bool)
         where Self: Sized,
             F: FnMut(Self::Item) -> bool
+        requires
+            // `f` is applied to a prefix of the items the iterator yields.
+            // When the iterator obeys the laws, those items are the elements of
+            // `remaining()`; otherwise nothing constrains them, so `f` has to
+            // accept every item.
+            old(self).obeys_prophetic_iter_laws() ==>
+                forall |i| 0 <= i < old(self).remaining().len() ==>
+                    #[trigger] f.requires((old(self).remaining()[i],)),
+            !old(self).obeys_prophetic_iter_laws() ==>
+                forall |x: Self::Item| #[trigger] f.requires((x,))
         default_ensures
             // The iterator consistently obeys, completes, and decreases throughout its lifetime
             final(self).obeys_prophetic_iter_laws() == old(self).obeys_prophetic_iter_laws(),
