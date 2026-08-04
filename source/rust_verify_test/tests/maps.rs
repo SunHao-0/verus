@@ -184,3 +184,134 @@ test_verify_one_file! {
         }
     } => Ok(())
 }
+
+test_verify_one_file! {
+    #[test] map_tracked_union_prefer_right_rejects_spec_right verus_code! {
+        use vstd::set::*;
+        use vstd::map::*;
+        use vstd::cell::pcell::*;
+
+        proof fn conjure<V>(v: V) -> (tracked out: V)
+            ensures
+                out == v,
+        {
+            let tracked mut m = Map::<int, V>::tracked_empty();
+            let ghost right = Map::<int, V>::empty().insert(0, v);
+            m.tracked_union_prefer_right(right);
+            assert(m.dom() =~= Set::<int>::empty().insert(0));
+            assert(m[0] == v);
+            m.tracked_remove(0)
+        }
+
+        proof fn contradiction(tracked p: PointsTo<u64>)
+            ensures
+                false,
+        {
+            let ghost g = p;
+            let tracked mut p2 = conjure(g);
+            assert(p2 == p);
+            p2.is_exclusive(&p);
+            assert(p2.id() != p.id());
+            assert(false);
+        }
+    } => Err(err) => assert_vir_error_msg(err, "expression has mode spec, expected mode proof")
+}
+
+test_verify_one_file! {
+    #[test] imap_tracked_union_prefer_right_rejects_spec_right verus_code! {
+        use vstd::iset::*;
+        use vstd::imap::*;
+        use vstd::cell::pcell::*;
+
+        proof fn conjure<V>(v: V) -> (tracked out: V)
+            ensures
+                out == v,
+        {
+            let tracked mut m = IMap::<int, V>::tracked_empty();
+            let ghost right = IMap::<int, V>::empty().insert(0, v);
+            m.tracked_union_prefer_right(right);
+            assert(m.dom() =~= ISet::<int>::empty().insert(0));
+            assert(m[0] == v);
+            m.tracked_remove(0)
+        }
+
+        proof fn contradiction(tracked p: PointsTo<u64>)
+            ensures
+                false,
+        {
+            let ghost g = p;
+            let tracked mut p2 = conjure(g);
+            assert(p2 == p);
+            p2.is_exclusive(&p);
+            assert(p2.id() != p.id());
+            assert(false);
+        }
+    } => Err(err) => assert_vir_error_msg(err, "expression has mode spec, expected mode proof")
+}
+
+test_verify_one_file! {
+    #[test] map_tracked_union_prefer_right_tracked_right verus_code! {
+        use vstd::set::*;
+        use vstd::map::*;
+        use vstd::cell::pcell::*;
+
+        fn test() {
+            let (c, Tracked(p)) = PCell::<u64>::new(5);
+            proof {
+                let tracked mut left = Map::<int, PointsTo<u64>>::tracked_empty();
+                let tracked mut right = Map::<int, PointsTo<u64>>::tracked_empty();
+                right.tracked_insert(0, p);
+                left.tracked_union_prefer_right(right);
+                assert(left.dom() =~= Set::<int>::empty().insert(0));
+                let tracked q = left.tracked_remove(0);
+                assert(q.id() == c.id());
+                assert(*q.value() == 5u64);
+            }
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] imap_tracked_union_prefer_right_tracked_right verus_code! {
+        use vstd::iset::*;
+        use vstd::imap::*;
+        use vstd::cell::pcell::*;
+
+        fn test() {
+            let (c, Tracked(p)) = PCell::<u64>::new(5);
+            proof {
+                let tracked mut left = IMap::<int, PointsTo<u64>>::tracked_empty();
+                let tracked mut right = IMap::<int, PointsTo<u64>>::tracked_empty();
+                right.tracked_insert(0, p);
+                left.tracked_union_prefer_right(right);
+                assert(left.dom() =~= ISet::<int>::empty().insert(0));
+                let tracked q = left.tracked_remove(0);
+                assert(q.id() == c.id());
+                assert(*q.value() == 5u64);
+            }
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] map_tracked_union_prefer_right_overlapping_key verus_code! {
+        use vstd::set::*;
+        use vstd::map::*;
+        use vstd::cell::pcell::*;
+
+        fn test() {
+            let (_c1, Tracked(p1)) = PCell::<u64>::new(5);
+            let (c2, Tracked(p2)) = PCell::<u64>::new(7);
+            proof {
+                let tracked mut left = Map::<int, PointsTo<u64>>::tracked_empty();
+                left.tracked_insert(0, p1);
+                let tracked mut right = Map::<int, PointsTo<u64>>::tracked_empty();
+                right.tracked_insert(0, p2);
+                left.tracked_union_prefer_right(right);
+                let tracked q = left.tracked_remove(0);
+                assert(q.id() == c2.id());
+                assert(*q.value() == 7u64);
+            }
+        }
+    } => Ok(())
+}

@@ -213,8 +213,9 @@ impl<K, V> Map<K, V> {
 
     /// Merge a map into a tracked map.
     ///
-    /// The new (key, value) pairs take precendece.
-    pub axiom fn tracked_union_prefer_right(tracked &mut self, right: Self)
+    /// The new (key, value) pairs take precendece; on a key present in both maps,
+    /// the value held by `self` is dropped.
+    pub axiom fn tracked_union_prefer_right(tracked &mut self, tracked right: Self)
         ensures
             *final(self) == old(self).union_prefer_right(right),
     ;
