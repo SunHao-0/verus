@@ -105,3 +105,26 @@ test_verify_one_file_with_options! {
         }
     } => Err(err) => assert_vir_error_msg(err, "#[verifier::assume_termination] not allowed with --no-cheating")
 }
+
+test_verify_one_file_with_options! {
+    #[test] test_no_cheating_vstd_pervasive_assume ["--no-cheating"] => verus_code! {
+        use vstd::prelude::*;
+        proof fn test() {
+            vstd::pervasive::assume(false);
+            assert(false);
+        }
+    } => Err(err) => assert_rust_error_msg(err, "cannot find function `assume` in module `vstd::pervasive`")
+}
+
+test_verify_one_file_with_options! {
+    #[test] test_no_cheating_vstd_pervasive_assert_affirm ["--no-cheating"] => verus_code! {
+        use vstd::prelude::*;
+        proof fn test(x: u8)
+            requires x == 3,
+        {
+            vstd::pervasive::assert(x == 3);
+            vstd::pervasive::affirm(x == 3);
+            assert(x == 3);
+        }
+    } => Ok(())
+}
