@@ -124,3 +124,33 @@ test_verify_one_file! {
         }
     } => Ok(())
 }
+
+test_verify_one_file! {
+    #[test] test_bool_then verus_code! {
+        use vstd::prelude::*;
+
+        fn test_then_true() {
+            let res: Option<u32> = true.then(|| -> (r: u32) ensures r == 7 { 7 });
+            assert(res is Some);
+            assert(res->Some_0 == 7);
+        }
+
+        fn test_then_false(x: u32) {
+            let res: Option<u32> = false.then(|| -> (r: u32)
+                requires x < 10
+                ensures r == x
+            { x });
+            assert(res is None);
+        }
+
+        fn test_then_conditional(b: bool, x: u32)
+            requires b ==> x < 10,
+        {
+            let res: Option<u32> = b.then(|| -> (r: u32)
+                requires x < 10
+                ensures r == x
+            { x });
+            assert(b ==> res is Some);
+        }
+    } => Ok(())
+}
