@@ -112,7 +112,7 @@ test_verify_one_file! {
 
         fn test()
         {
-            assume(vstd::laws_cmp::obeys_cmp::<MyStruct>());
+            assume(vstd::std_specs::btree::key_obeys_cmp_spec::<MyStruct>());
 
             let mut m = BTreeMap::<MyStruct, u32>::new();
             assert(m@ == Map::<MyStruct, u32>::empty());
@@ -154,7 +154,7 @@ test_verify_one_file! {
 
         fn test()
         {
-            assume(vstd::laws_cmp::obeys_cmp::<MyStruct>());
+            assume(vstd::std_specs::btree::key_obeys_cmp_spec::<MyStruct>());
 
             let mut m = BTreeSet::<MyStruct>::new();
             assert(m@ == Set::<MyStruct>::empty());
@@ -206,7 +206,7 @@ test_verify_one_file! {
 
         fn test()
         {
-            // Missing `assume(vstd::laws_cmp::obeys_cmp::<MyStruct>());`
+            // Missing `assume(vstd::std_specs::btree::key_obeys_cmp_spec::<MyStruct>());`
 
             let mut m = BTreeMap::<MyStruct, u32>::new();
             let s1 = MyStruct{ i: 3, j: 7 };
@@ -232,7 +232,7 @@ test_verify_one_file! {
 
         fn test()
         {
-            // Missing `assume(vstd::laws_cmp::obeys_cmp::<MyStruct>());`
+            // Missing `assume(vstd::std_specs::btree::key_obeys_cmp_spec::<MyStruct>());`
 
             let mut m = BTreeSet::<MyStruct>::new();
             let s1 = MyStruct{ i: 3, j: 7 };
@@ -477,6 +477,347 @@ test_verify_one_file_with_options! {
                     bs.values().all(|b| b)
                 }
             }
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] test_btree_map_cmp_equal_keys_fails verus_code! {
+        use std::collections::BTreeMap;
+        use vstd::prelude::*;
+        use vstd::laws_cmp::*;
+        use vstd::laws_eq::*;
+        use vstd::std_specs::cmp::{OrdSpecImpl, PartialEqSpecImpl, PartialOrdSpecImpl};
+        use core::cmp::Ordering;
+
+        pub struct Slot {
+            pub id: u8,
+            pub tag: u8,
+        }
+
+        impl PartialEq for Slot {
+            fn eq(&self, other: &Slot) -> (b: bool) {
+                self.id == other.id
+            }
+        }
+
+        impl PartialEqSpecImpl for Slot {
+            open spec fn obeys_eq_spec() -> bool {
+                true
+            }
+
+            open spec fn eq_spec(&self, other: &Slot) -> bool {
+                self.id == other.id
+            }
+        }
+
+        impl Eq for Slot {
+        }
+
+        impl PartialOrd for Slot {
+            fn partial_cmp(&self, other: &Slot) -> (r: Option<Ordering>) {
+                if self.id < other.id {
+                    Some(Ordering::Less)
+                } else if self.id == other.id {
+                    Some(Ordering::Equal)
+                } else {
+                    Some(Ordering::Greater)
+                }
+            }
+        }
+
+        impl PartialOrdSpecImpl for Slot {
+            open spec fn obeys_partial_cmp_spec() -> bool {
+                true
+            }
+
+            open spec fn partial_cmp_spec(&self, other: &Slot) -> Option<Ordering> {
+                if self.id < other.id {
+                    Some(Ordering::Less)
+                } else if self.id == other.id {
+                    Some(Ordering::Equal)
+                } else {
+                    Some(Ordering::Greater)
+                }
+            }
+        }
+
+        impl Ord for Slot {
+            fn cmp(&self, other: &Slot) -> (r: Ordering) {
+                if self.id < other.id {
+                    Ordering::Less
+                } else if self.id == other.id {
+                    Ordering::Equal
+                } else {
+                    Ordering::Greater
+                }
+            }
+        }
+
+        impl OrdSpecImpl for Slot {
+            open spec fn obeys_cmp_spec() -> bool {
+                true
+            }
+
+            open spec fn cmp_spec(&self, other: &Slot) -> Ordering {
+                if self.id < other.id {
+                    Ordering::Less
+                } else if self.id == other.id {
+                    Ordering::Equal
+                } else {
+                    Ordering::Greater
+                }
+            }
+        }
+
+        proof fn slot_obeys_cmp()
+            ensures
+                obeys_cmp::<Slot>(),
+        {
+            reveal(obeys_eq_spec_properties);
+            reveal(obeys_partial_cmp_spec_properties);
+            reveal(obeys_cmp_partial_ord);
+            reveal(obeys_cmp_ord);
+        }
+
+        fn test() {
+            proof { slot_obeys_cmp(); }
+
+            let mut m = BTreeMap::<Slot, u8>::new();
+            m.insert(Slot { id: 1, tag: 0 }, 10);
+            m.insert(Slot { id: 1, tag: 1 }, 20);
+
+            let v = m.get(&Slot { id: 1, tag: 0 });
+            match v {
+                Some(x) => assert(*x == 10), // FAILS
+                None => {},
+            }
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
+    #[test] test_btree_key_guard_excludes_cmp_equal_keys verus_code! {
+        use vstd::prelude::*;
+        use vstd::laws_eq::*;
+        use vstd::std_specs::btree::key_obeys_cmp_spec;
+        use vstd::std_specs::cmp::{
+            OrdSpecImpl,
+            PartialEqSpec,
+            PartialEqSpecImpl,
+            PartialOrdSpecImpl,
+        };
+        use core::cmp::Ordering;
+
+        pub struct Slot {
+            pub id: u8,
+            pub tag: u8,
+        }
+
+        impl PartialEq for Slot {
+            fn eq(&self, other: &Slot) -> (b: bool) {
+                self.id == other.id
+            }
+        }
+
+        impl PartialEqSpecImpl for Slot {
+            open spec fn obeys_eq_spec() -> bool {
+                true
+            }
+
+            open spec fn eq_spec(&self, other: &Slot) -> bool {
+                self.id == other.id
+            }
+        }
+
+        impl Eq for Slot {
+        }
+
+        impl PartialOrd for Slot {
+            fn partial_cmp(&self, other: &Slot) -> (r: Option<Ordering>) {
+                if self.id < other.id {
+                    Some(Ordering::Less)
+                } else if self.id == other.id {
+                    Some(Ordering::Equal)
+                } else {
+                    Some(Ordering::Greater)
+                }
+            }
+        }
+
+        impl PartialOrdSpecImpl for Slot {
+            open spec fn obeys_partial_cmp_spec() -> bool {
+                true
+            }
+
+            open spec fn partial_cmp_spec(&self, other: &Slot) -> Option<Ordering> {
+                if self.id < other.id {
+                    Some(Ordering::Less)
+                } else if self.id == other.id {
+                    Some(Ordering::Equal)
+                } else {
+                    Some(Ordering::Greater)
+                }
+            }
+        }
+
+        impl Ord for Slot {
+            fn cmp(&self, other: &Slot) -> (r: Ordering) {
+                if self.id < other.id {
+                    Ordering::Less
+                } else if self.id == other.id {
+                    Ordering::Equal
+                } else {
+                    Ordering::Greater
+                }
+            }
+        }
+
+        impl OrdSpecImpl for Slot {
+            open spec fn obeys_cmp_spec() -> bool {
+                true
+            }
+
+            open spec fn cmp_spec(&self, other: &Slot) -> Ordering {
+                if self.id < other.id {
+                    Ordering::Less
+                } else if self.id == other.id {
+                    Ordering::Equal
+                } else {
+                    Ordering::Greater
+                }
+            }
+        }
+
+        proof fn slot_is_not_a_btree_key()
+            requires
+                key_obeys_cmp_spec::<Slot>(),
+            ensures
+                false,
+        {
+            reveal(obeys_concrete_eq);
+            assert(PartialEqSpec::eq_spec(&Slot { id: 1, tag: 0 }, &Slot { id: 1, tag: 1 }));
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] test_btree_map_custom_key_obeys_guard verus_code! {
+        use std::collections::BTreeMap;
+        use vstd::prelude::*;
+        use vstd::laws_cmp::*;
+        use vstd::laws_eq::*;
+        use vstd::std_specs::btree::key_obeys_cmp_spec;
+        use vstd::std_specs::cmp::{OrdSpecImpl, PartialEqSpecImpl, PartialOrdSpecImpl};
+        use core::cmp::Ordering;
+
+        pub struct Id(pub u8);
+
+        impl PartialEq for Id {
+            fn eq(&self, other: &Id) -> (b: bool) {
+                self.0 == other.0
+            }
+        }
+
+        impl PartialEqSpecImpl for Id {
+            open spec fn obeys_eq_spec() -> bool {
+                true
+            }
+
+            open spec fn eq_spec(&self, other: &Id) -> bool {
+                self.0 == other.0
+            }
+        }
+
+        impl Eq for Id {
+        }
+
+        impl PartialOrd for Id {
+            fn partial_cmp(&self, other: &Id) -> (r: Option<Ordering>) {
+                if self.0 < other.0 {
+                    Some(Ordering::Less)
+                } else if self.0 == other.0 {
+                    Some(Ordering::Equal)
+                } else {
+                    Some(Ordering::Greater)
+                }
+            }
+        }
+
+        impl PartialOrdSpecImpl for Id {
+            open spec fn obeys_partial_cmp_spec() -> bool {
+                true
+            }
+
+            open spec fn partial_cmp_spec(&self, other: &Id) -> Option<Ordering> {
+                if self.0 < other.0 {
+                    Some(Ordering::Less)
+                } else if self.0 == other.0 {
+                    Some(Ordering::Equal)
+                } else {
+                    Some(Ordering::Greater)
+                }
+            }
+        }
+
+        impl Ord for Id {
+            fn cmp(&self, other: &Id) -> (r: Ordering) {
+                if self.0 < other.0 {
+                    Ordering::Less
+                } else if self.0 == other.0 {
+                    Ordering::Equal
+                } else {
+                    Ordering::Greater
+                }
+            }
+        }
+
+        impl OrdSpecImpl for Id {
+            open spec fn obeys_cmp_spec() -> bool {
+                true
+            }
+
+            open spec fn cmp_spec(&self, other: &Id) -> Ordering {
+                if self.0 < other.0 {
+                    Ordering::Less
+                } else if self.0 == other.0 {
+                    Ordering::Equal
+                } else {
+                    Ordering::Greater
+                }
+            }
+        }
+
+        proof fn id_obeys_key_guard()
+            ensures
+                key_obeys_cmp_spec::<Id>(),
+        {
+            reveal(obeys_eq_spec_properties);
+            reveal(obeys_partial_cmp_spec_properties);
+            reveal(obeys_cmp_partial_ord);
+            reveal(obeys_cmp_ord);
+            reveal(obeys_concrete_eq);
+        }
+
+        fn test() {
+            proof { id_obeys_key_guard(); }
+
+            let mut m = BTreeMap::<Id, u8>::new();
+            m.insert(Id(3), 10);
+            m.insert(Id(6), 20);
+            assert(m@[Id(3)] == 10);
+
+            let b = m.contains_key(&Id(6));
+            assert(b);
+
+            let v = m.get(&Id(3));
+            match v {
+                Some(x) => assert(*x == 10),
+                None => assert(false),
+            }
+
+            let n = m.len();
+            assert(n == 2);
         }
     } => Ok(())
 }
