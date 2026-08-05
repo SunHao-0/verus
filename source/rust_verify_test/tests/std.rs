@@ -1816,3 +1816,144 @@ test_verify_one_file! {
         }
     } => Ok(())
 }
+
+test_verify_one_file! {
+    #[test] vecdeque_push_back_length_overflow verus_code! {
+        use vstd::prelude::*;
+        use std::collections::VecDeque;
+
+        fn fill_to_max(v: &mut VecDeque<()>)
+            ensures
+                final(v)@.len() == usize::MAX,
+        {
+            v.resize(usize::MAX, ());
+        }
+
+        fn overflow(v: &mut VecDeque<()>)
+            requires
+                old(v)@.len() == usize::MAX,
+            ensures
+                false,
+        {
+            v.push_back(()); // FAILS
+            let n = v.len();
+            assert(n == v@.len());
+        }
+
+        fn derive() {
+            let mut v: VecDeque<()> = VecDeque::new();
+            fill_to_max(&mut v);
+            overflow(&mut v);
+            assert(false);
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
+    #[test] vecdeque_push_front_length_overflow verus_code! {
+        use vstd::prelude::*;
+        use std::collections::VecDeque;
+
+        fn overflow(v: &mut VecDeque<()>)
+            requires
+                old(v)@.len() == usize::MAX,
+            ensures
+                false,
+        {
+            v.push_front(()); // FAILS
+            let n = v.len();
+            assert(n == v@.len());
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
+    #[test] vecdeque_insert_length_overflow verus_code! {
+        use vstd::prelude::*;
+        use std::collections::VecDeque;
+
+        fn overflow(v: &mut VecDeque<()>)
+            requires
+                old(v)@.len() == usize::MAX,
+            ensures
+                false,
+        {
+            v.insert(0, ()); // FAILS
+            let n = v.len();
+            assert(n == v@.len());
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
+    #[test] vecdeque_append_length_overflow verus_code! {
+        use vstd::prelude::*;
+        use std::collections::VecDeque;
+
+        fn overflow(v: &mut VecDeque<()>, other: &mut VecDeque<()>)
+            requires
+                old(v)@.len() == usize::MAX,
+                old(other)@.len() == 1,
+            ensures
+                false,
+        {
+            v.append(other); // FAILS
+            let n = v.len();
+            assert(n == v@.len());
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
+    #[test] vecdeque_growth_within_bounds verus_code! {
+        use vstd::prelude::*;
+        use std::collections::VecDeque;
+
+        fn push_back_when_there_is_room(v: &mut VecDeque<u32>, x: u32)
+            requires
+                old(v)@.len() < usize::MAX,
+            ensures
+                final(v)@ == old(v)@.push(x),
+        {
+            v.push_back(x);
+        }
+
+        fn test() {
+            let mut v1: VecDeque<u32> = VecDeque::new();
+            let mut v2: VecDeque<u32> = VecDeque::new();
+            v1.push_back(3);
+            v1.push_front(2);
+            assert(v1@ == seq![2u32, 3u32]);
+
+            v2.push_back(5);
+            v2.push_back(7);
+            v2.insert(1, 6);
+            assert(v2@ == seq![5u32, 6u32, 7u32]);
+
+            v1.append(&mut v2);
+            assert(v2@.len() == 0);
+            assert(v1@ == seq![2u32, 3u32, 5u32, 6u32, 7u32]);
+
+            push_back_when_there_is_room(&mut v1, 8);
+            assert(v1@ == seq![2u32, 3u32, 5u32, 6u32, 7u32, 8u32]);
+        }
+
+        fn fill(n: usize) -> (v: VecDeque<u32>)
+            ensures
+                v@.len() == n,
+        {
+            let mut v: VecDeque<u32> = VecDeque::new();
+            let mut i: usize = 0;
+            while i < n
+                invariant
+                    i <= n,
+                    v@.len() == i,
+                decreases n - i,
+            {
+                v.push_back(i as u32);
+                i = i + 1;
+            }
+            v
+        }
+    } => Ok(())
+}

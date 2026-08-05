@@ -119,6 +119,8 @@ pub assume_specification<T, A: Allocator>[ VecDeque::<T, A>::push_back ](
     v: &mut VecDeque<T, A>,
     value: T,
 )
+    requires
+        old(v)@.len() < usize::MAX,
     ensures
         final(v)@ == old(v)@.push(value),
 ;
@@ -127,6 +129,8 @@ pub assume_specification<T, A: Allocator>[ VecDeque::<T, A>::push_front ](
     v: &mut VecDeque<T, A>,
     value: T,
 )
+    requires
+        old(v)@.len() < usize::MAX,
     ensures
         final(v)@ == seq![value] + old(v)@,
 ;
@@ -169,6 +173,8 @@ pub assume_specification<T, A: Allocator>[ VecDeque::<T, A>::append ](
     v: &mut VecDeque<T, A>,
     other: &mut VecDeque<T, A>,
 )
+    requires
+        old(v)@.len() + old(other)@.len() <= usize::MAX,
     ensures
         final(v)@ == old(v)@ + old(other)@,
         final(other)@ == Seq::<T>::empty(),
@@ -181,6 +187,7 @@ pub assume_specification<T, A: Allocator>[ VecDeque::<T, A>::insert ](
 )
     requires
         i <= old(v).len(),
+        old(v)@.len() < usize::MAX,
     ensures
         final(v)@ == old(v)@.insert(i as int, element),
 ;
