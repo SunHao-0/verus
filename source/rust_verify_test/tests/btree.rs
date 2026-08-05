@@ -245,6 +245,198 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
+    #[test] test_btree_map_clone verus_code! {
+        use std::collections::BTreeMap;
+        use vstd::prelude::*;
+
+        fn test()
+        {
+            let mut m = BTreeMap::<u32, i8>::new();
+            m.insert(3, 4);
+            m.insert(6, -8);
+
+            let c = m.clone();
+            assert(c@ =~= m@);
+
+            let v = c.get(&6);
+            match v {
+                Some(v) => assert(*v == -8),
+                None => assert(false),
+            };
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] test_btree_set_clone verus_code! {
+        use std::collections::BTreeSet;
+        use vstd::prelude::*;
+
+        fn test()
+        {
+            let mut s = BTreeSet::<u32>::new();
+            s.insert(3);
+
+            let t = s.clone();
+            assert(t@ =~= s@);
+
+            let b = t.contains(&3);
+            assert(b);
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] test_btree_clone_std_keys verus_code! {
+        use std::collections::{BTreeMap, BTreeSet};
+        use vstd::prelude::*;
+
+        fn test(m: &BTreeMap<String, u8>, s: &BTreeSet<Box<u32>>)
+        {
+            let c = m.clone();
+            assert(c@ =~= m@);
+
+            let t = s.clone();
+            assert(t@ =~= s@);
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] test_btree_clone_struct_key verus_code! {
+        use std::collections::{BTreeMap, BTreeSet};
+        use vstd::prelude::*;
+        use vstd::std_specs::btree::*;
+
+        #[derive(PartialEq, Eq, PartialOrd, Ord)]
+        struct MyStruct
+        {
+            pub i: u16,
+            pub j: i32,
+        }
+
+        impl Clone for MyStruct
+        {
+            fn clone(&self) -> (res: Self)
+                ensures
+                    res == *self,
+            {
+                MyStruct{ i: self.i, j: self.j }
+            }
+        }
+
+        fn test(m: &BTreeMap<MyStruct, u32>, s: &BTreeSet<MyStruct>)
+        {
+            assert(key_obeys_clone_identity::<MyStruct>());
+
+            let c = m.clone();
+            assert(c@.dom() =~= m@.dom());
+
+            let t = s.clone();
+            assert(t@ =~= s@);
+        }
+
+        fn test_generic<K: Clone, V: Clone>(m: &BTreeMap<K, V>, k: K)
+            requires
+                key_obeys_clone_identity::<K>(),
+                m@.contains_key(k),
+        {
+            let c = m.clone();
+            assert(c@.contains_key(k));
+            assert(cloned::<V>(m@[k], c@[k]));
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] test_btree_map_clone_value_not_identity_fails verus_code! {
+        use std::collections::BTreeMap;
+        use vstd::prelude::*;
+
+        struct Gen
+        {
+            pub n: u8,
+        }
+
+        impl Clone for Gen
+        {
+            fn clone(&self) -> (res: Gen)
+            {
+                Gen{ n: if self.n < 255 { (self.n + 1) as u8 } else { 255 } }
+            }
+        }
+
+        fn test(m: &BTreeMap<u32, Gen>, k: u32)
+            requires
+                m@.contains_key(k),
+                m@[k].n == 1,
+        {
+            let c = m.clone();
+            assert(c@.dom() =~= m@.dom());
+            assert(c@[k].n == 1); // FAILS
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
+    #[test] test_btree_map_clone_key_not_identity_fails verus_code! {
+        use std::collections::BTreeMap;
+        use vstd::prelude::*;
+
+        #[derive(PartialEq, Eq, PartialOrd, Ord)]
+        struct Gen
+        {
+            pub n: u8,
+        }
+
+        impl Clone for Gen
+        {
+            fn clone(&self) -> (res: Gen)
+            {
+                Gen{ n: if self.n < 255 { (self.n + 1) as u8 } else { 255 } }
+            }
+        }
+
+        fn test(m: &BTreeMap<Gen, u32>, k: Gen)
+            requires
+                m@.contains_key(k),
+        {
+            let c = m.clone();
+            assert(c@.contains_key(k)); // FAILS
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
+    #[test] test_btree_set_clone_key_not_identity_fails verus_code! {
+        use std::collections::BTreeSet;
+        use vstd::prelude::*;
+
+        #[derive(PartialEq, Eq, PartialOrd, Ord)]
+        struct Gen
+        {
+            pub n: u8,
+        }
+
+        impl Clone for Gen
+        {
+            fn clone(&self) -> (res: Gen)
+            {
+                Gen{ n: if self.n < 255 { (self.n + 1) as u8 } else { 255 } }
+            }
+        }
+
+        fn test(s: &BTreeSet<Gen>, k: Gen)
+            requires
+                s@.contains(k),
+        {
+            let t = s.clone();
+            assert(t@.contains(k)); // FAILS
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
     #[test] test_btree_map_deep_view verus_code! {
         use std::collections::BTreeMap;
         use vstd::prelude::*;

@@ -56,6 +56,19 @@ pub broadcast axiom fn axiom_increasing_seq_meaning<K: Ord>(s: Seq<K>)
             0 <= i < j < s.len() ==> s[i].cmp_spec(&s[j]) is Less,
 ;
 
+/// Whether cloning a `Key` always produces a key equal to the original.
+///
+/// Cloning a [`BTreeMap`] or a [`BTreeSet`] clones every key, and the keys are the domain of
+/// the view, so the clone only has the same view as the original when this holds. [`Clone`]
+/// documents `x == x -> x.clone() == x` as a property that `BTreeMap` and `BTreeSet` rely on,
+/// but violating it is a logic error rather than undefined behavior, which is why
+/// [`Clone::clone`] carries no postcondition and this has to be required separately.
+/// It is the [`BTreeMap`] analogue of clause (3) of
+/// [`obeys_key_model`](super::hash::obeys_key_model).
+pub open spec fn key_obeys_clone_identity<Key: Clone>() -> bool {
+    forall|k: Key, k2: Key| #[trigger] cloned::<Key>(k, k2) ==> k2 == k
+}
+
 /// Specifications for the behavior of
 /// [`alloc::collections::btree_map::Keys`](https://doc.rust-lang.org/alloc/collections/btree_map/struct.Keys.html).
 #[verifier::external_type_specification]
@@ -358,7 +371,10 @@ pub assume_specification<K: Clone, V: Clone, A: Allocator + Clone>[ <BTreeMap::<
     A,
 > as Clone>::clone ](this: &BTreeMap<K, V, A>) -> (other: BTreeMap<K, V, A>)
     ensures
-        other@ == this@,
+        key_obeys_clone_identity::<K>() ==> {
+            &&& other@.dom() == this@.dom()
+            &&& forall|k| #[trigger] this@.contains_key(k) ==> cloned::<V>(this@[k], other@[k])
+        },
 ;
 
 pub assume_specification<Key, Value>[ BTreeMap::<Key, Value>::new ]() -> (m: BTreeMap<Key, Value>)
@@ -673,7 +689,7 @@ pub assume_specification<K: Clone, A: Allocator + Clone>[ <BTreeSet::<K, A> as C
     this: &BTreeSet<K, A>,
 ) -> (other: BTreeSet<K, A>)
     ensures
-        other@ == this@,
+        key_obeys_clone_identity::<K>() ==> other@ == this@,
 ;
 
 pub assume_specification<Key>[ BTreeSet::<Key>::new ]() -> (m: BTreeSet<Key>)
