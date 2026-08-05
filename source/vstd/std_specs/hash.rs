@@ -18,6 +18,16 @@
 //! the future, we plan to devise a way for you to prove that it does
 //! so, so that you don't have to make such an assumption.
 //!
+//! Looking a key up by a borrowed form of it, e.g., looking up a key
+//! of type `Box<u32>` with a `&u32`, additionally requires that the
+//! `Borrow` implementation relating the two types obey our model,
+//! i.e., that `Key::hash` and `Key`'s `==` agree with those of the
+//! type it's borrowed as. We have axioms that borrowing a key as
+//! itself, as the contents of a `Box`, or (for `String`) as a `str`
+//! obeys this model; for any other pair you need to state your
+//! assumption that it does so with
+//! `assume(vstd::std_specs::hash::obeys_borrow_model::<MyKey, MyQ>());`.
+//!
 //! By default, the Verus standard library brings useful axioms
 //! about the behavior of `HashMap` and `HashSet` into the ambient
 //! reasoning context by broadcasting the group
@@ -217,6 +227,66 @@ pub broadcast proof fn axiom_box_integer_type_obeys_hash_table_key_model<Key: In
     admit();
 }
 
+/// Specifies whether the `Borrow<Q>` implementation for a type `Key`
+/// conforms to our requirements for looking up a `Key` in our hash
+/// table (and hash set) model by a borrowed form of it, as
+/// `HashMap::get`, `HashMap::contains_key`, `HashMap::remove`,
+/// `HashSet::get`, `HashSet::contains` and `HashSet::remove` do.
+///
+/// The three requirements are (1) `Q::hash` and the executable `==`
+/// operator on `Q` are deterministic, (2) hashing a `Key` produces the
+/// same result as hashing the `Q` it borrows as, and (3) two `Key`s
+/// borrow as `Q`s that the executable `==` operator considers equal if
+/// and only if those two `Key`s are identical. Requirements (2) and
+/// (3) are what the standard library means when it says that "`Eq`,
+/// `Ord` and `Hash` must be equivalent for borrowed and owned values"
+/// [1]; like the requirements of `obeys_key_model`, they're a duty of
+/// the implementor that nothing checks.
+///
+/// The standard library has axioms that a key borrowed as itself, a
+/// `Box<Q>` borrowed as a `Q`, and a `String` borrowed as a `str` obey
+/// this model, each given `obeys_key_model::<Key>()`. If you want to
+/// look up a key of some type `MyKey` by some other type `MyQ`, you
+/// need to explicitly state your assumption that it does so with
+/// `assume(vstd::std_specs::hash::obeys_borrow_model::<MyKey, MyQ>())`.
+///
+/// [1]: https://doc.rust-lang.org/std/borrow/trait.Borrow.html
+#[verifier::external_body]
+pub uninterp spec fn obeys_borrow_model<Key: ?Sized, Q: ?Sized>() -> bool;
+
+// These axioms state that the `Borrow` implementations our hash table
+// model can interpret -- borrowing a key as itself, borrowing a
+// `Box<Q>` as a `Q`, and borrowing a `String` as a `str` -- obey the
+// requirements for looking a key up by a borrowed form of it. In each
+// case `Q`'s `Hash` and `Eq` are `Key`'s, so the two agree, and
+// `obeys_key_model::<Key>()` makes them deterministic.
+pub broadcast proof fn axiom_deref_key_obeys_borrow_model<Q: ?Sized>()
+    requires
+        obeys_key_model::<Q>(),
+    ensures
+        #[trigger] obeys_borrow_model::<Q, Q>(),
+{
+    admit();
+}
+
+pub broadcast proof fn axiom_box_key_obeys_borrow_model<Q: ?Sized>()
+    requires
+        obeys_key_model::<Box<Q>>(),
+    ensures
+        #[trigger] obeys_borrow_model::<Box<Q>, Q>(),
+{
+    admit();
+}
+
+pub broadcast proof fn axiom_string_key_obeys_borrow_model()
+    requires
+        obeys_key_model::<String>(),
+    ensures
+        #[trigger] obeys_borrow_model::<String, str>(),
+{
+    admit();
+}
+
 #[verifier::external_trait_specification]
 pub trait ExHasher {
     type ExternalTraitSpecificationFor: Hasher;
@@ -401,6 +471,9 @@ pub assume_specification<'a, Key, Value, S, A: Allocator>[ HashMap::<Key, Value,
 /// for information on use with primitive types and other types,
 /// and see [`builds_valid_hashers()`](https://verus-lang.github.io/verus/verusdoc/vstd/std_specs/hash/fn.builds_valid_hashers.html)
 /// for information on use with Rust's default implementation and custom implementations.
+/// The specifications of the methods that look a key up by a borrowed form of it, i.e.,
+/// `contains_key`, `get` and `remove`, additionally require
+/// [`obeys_borrow_model::<Key, Q>()`](https://verus-lang.github.io/verus/verusdoc/vstd/std_specs/hash/fn.obeys_borrow_model.html).
 ///
 /// Axioms about the behavior of HashMap are present in the broadcast group `vstd::std_specs::hash::group_hash_axioms`.
 #[verifier::external_type_specification]
@@ -684,10 +757,8 @@ pub assume_specification<
     k: &Q,
 ) -> (result: bool)
     ensures
-        obeys_key_model::<Key>() && builds_valid_hashers::<S>() ==> result == contains_borrowed_key(
-            m@,
-            k,
-        ),
+        obeys_key_model::<Key>() && obeys_borrow_model::<Key, Q>() && builds_valid_hashers::<S>()
+            ==> result == contains_borrowed_key(m@, k),
 ;
 
 // The specification for `get` has a parameter `key: &Q` where you'd
@@ -741,7 +812,8 @@ pub assume_specification<
 >[ HashMap::<Key, Value, S, A>::get::<Q> ](m: &'a HashMap<Key, Value, S, A>, k: &Q) -> (result:
     Option<&'a Value>)
     ensures
-        obeys_key_model::<Key>() && builds_valid_hashers::<S>() ==> match result {
+        obeys_key_model::<Key>() && obeys_borrow_model::<Key, Q>() && builds_valid_hashers::<S>()
+            ==> match result {
             Some(v) => maps_borrowed_key_to_value(m@, k, *v),
             None => !contains_borrowed_key(m@, k),
         },
@@ -802,7 +874,8 @@ pub assume_specification<
 >[ HashMap::<Key, Value, S, A>::remove::<Q> ](m: &mut HashMap<Key, Value, S, A>, k: &Q) -> (result:
     Option<Value>)
     ensures
-        obeys_key_model::<Key>() && builds_valid_hashers::<S>() ==> {
+        obeys_key_model::<Key>() && obeys_borrow_model::<Key, Q>() && builds_valid_hashers::<S>()
+            ==> {
             &&& borrowed_key_removed(old(m)@, final(m)@, k)
             &&& match result {
                 Some(v) => maps_borrowed_key_to_value(old(m)@, k, v),
@@ -890,6 +963,9 @@ impl<'a, K> super::iter::IteratorSpecImpl for hash_set::Iter::<'a, K> {
 /// for information on use with primitive types and custom types,
 /// and see [`builds_valid_hashers()`](https://verus-lang.github.io/verus/verusdoc/vstd/std_specs/hash/fn.builds_valid_hashers.html)
 /// for information on use with Rust's default implementation and custom implementations.
+/// The specifications of the methods that look a key up by a borrowed form of it, i.e.,
+/// `contains`, `get` and `remove`, additionally require
+/// [`obeys_borrow_model::<Key, Q>()`](https://verus-lang.github.io/verus/verusdoc/vstd/std_specs/hash/fn.obeys_borrow_model.html).
 ///
 /// Axioms about the behavior of HashSet are present in the broadcast group `vstd::std_specs::hash::group_hash_axioms`.
 #[verifier::external_type_specification]
@@ -1003,8 +1079,8 @@ pub assume_specification<
     Q: Hash + Eq + ?Sized,
 >[ HashSet::<Key, S, A>::contains ](m: &HashSet<Key, S, A>, k: &Q) -> (result: bool)
     ensures
-        obeys_key_model::<Key>() && builds_valid_hashers::<S>() ==> result
-            == set_contains_borrowed_key(m@, k),
+        obeys_key_model::<Key>() && obeys_borrow_model::<Key, Q>() && builds_valid_hashers::<S>()
+            ==> result == set_contains_borrowed_key(m@, k),
 ;
 
 // The specification for `get` has a parameter `key: &Q` where you'd
@@ -1049,7 +1125,8 @@ pub assume_specification<
     Q: Hash + Eq + ?Sized,
 >[ HashSet::<Key, S, A>::get::<Q> ](m: &'a HashSet<Key, S, A>, k: &Q) -> (result: Option<&'a Key>)
     ensures
-        obeys_key_model::<Key>() && builds_valid_hashers::<S>() ==> match result {
+        obeys_key_model::<Key>() && obeys_borrow_model::<Key, Q>() && builds_valid_hashers::<S>()
+            ==> match result {
             Some(v) => sets_borrowed_key_to_key(m@, k, v),
             None => !set_contains_borrowed_key(m@, k),
         },
@@ -1099,7 +1176,8 @@ pub assume_specification<
     Q: Hash + Eq + ?Sized,
 >[ HashSet::<Key, S, A>::remove::<Q> ](m: &mut HashSet<Key, S, A>, k: &Q) -> (result: bool)
     ensures
-        obeys_key_model::<Key>() && builds_valid_hashers::<S>() ==> {
+        obeys_key_model::<Key>() && obeys_borrow_model::<Key, Q>() && builds_valid_hashers::<S>()
+            ==> {
             &&& sets_differ_by_borrowed_key(old(m)@, final(m)@, k)
             &&& result == set_contains_borrowed_key(old(m)@, k)
         },
@@ -1431,6 +1509,9 @@ pub broadcast group group_hash_axioms {
     axiom_isize_obeys_hash_table_key_model,
     axiom_box_bool_obeys_hash_table_key_model,
     axiom_box_integer_type_obeys_hash_table_key_model,
+    axiom_deref_key_obeys_borrow_model,
+    axiom_box_key_obeys_borrow_model,
+    axiom_string_key_obeys_borrow_model,
     axiom_random_state_builds_valid_hashers,
     axiom_spec_hash_map_len,
     axiom_set_box_key_removed,

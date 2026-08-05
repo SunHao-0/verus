@@ -210,6 +210,155 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
+    #[test] test_hash_map_lawless_borrow_fails verus_code! {
+        use core::borrow::Borrow;
+        use core::hash::{Hash, Hasher};
+        use std::collections::HashMap;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use vstd::prelude::*;
+        use vstd::std_specs::cmp::PartialEqSpecImpl;
+
+        exec static ANSWER: AtomicBool = AtomicBool::new(true);
+
+        pub struct MyQ;
+
+        impl Hash for MyQ {
+            #[verifier::external_body]
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                1u32.hash(state)
+            }
+        }
+
+        impl PartialEqSpecImpl for MyQ {
+            open spec fn obeys_eq_spec() -> bool { false }
+            open spec fn eq_spec(&self, other: &MyQ) -> bool { true }
+        }
+
+        impl PartialEq for MyQ {
+            #[verifier::external_body]
+            fn eq(&self, other: &MyQ) -> bool {
+                ANSWER.load(Ordering::SeqCst)
+            }
+        }
+
+        impl Eq for MyQ {
+        }
+
+        impl Borrow<MyQ> for Box<u32> {
+            #[verifier::external_body]
+            fn borrow(&self) -> &MyQ {
+                &MyQ
+            }
+        }
+
+        fn test(m: HashMap<Box<u32>, u32>, q: MyQ) {
+            let a = m.contains_key::<MyQ>(&q);
+            let b = m.contains_key::<MyQ>(&q);
+            assert(a == b); // FAILS
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
+    #[test] test_hash_set_lawless_borrow_fails verus_code! {
+        use core::borrow::Borrow;
+        use core::hash::{Hash, Hasher};
+        use std::collections::HashSet;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use vstd::prelude::*;
+        use vstd::std_specs::cmp::PartialEqSpecImpl;
+
+        exec static ANSWER: AtomicBool = AtomicBool::new(true);
+
+        pub struct MyQ;
+
+        impl Hash for MyQ {
+            #[verifier::external_body]
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                1u32.hash(state)
+            }
+        }
+
+        impl PartialEqSpecImpl for MyQ {
+            open spec fn obeys_eq_spec() -> bool { false }
+            open spec fn eq_spec(&self, other: &MyQ) -> bool { true }
+        }
+
+        impl PartialEq for MyQ {
+            #[verifier::external_body]
+            fn eq(&self, other: &MyQ) -> bool {
+                ANSWER.load(Ordering::SeqCst)
+            }
+        }
+
+        impl Eq for MyQ {
+        }
+
+        impl Borrow<MyQ> for Box<u32> {
+            #[verifier::external_body]
+            fn borrow(&self) -> &MyQ {
+                &MyQ
+            }
+        }
+
+        fn test(s: HashSet<Box<u32>>, q: MyQ) {
+            let a = s.contains::<MyQ>(&q);
+            let b = s.contains::<MyQ>(&q);
+            assert(a == b); // FAILS
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
+    #[test] test_hash_map_assumed_borrow_model verus_code! {
+        use core::borrow::Borrow;
+        use core::hash::{Hash, Hasher};
+        use std::collections::HashMap;
+        use vstd::prelude::*;
+        use vstd::std_specs::cmp::PartialEqSpecImpl;
+        use vstd::std_specs::hash::obeys_borrow_model;
+
+        pub struct MyQ;
+
+        impl Hash for MyQ {
+            #[verifier::external_body]
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                1u32.hash(state)
+            }
+        }
+
+        impl PartialEqSpecImpl for MyQ {
+            open spec fn obeys_eq_spec() -> bool { false }
+            open spec fn eq_spec(&self, other: &MyQ) -> bool { true }
+        }
+
+        impl PartialEq for MyQ {
+            #[verifier::external_body]
+            fn eq(&self, other: &MyQ) -> bool {
+                true
+            }
+        }
+
+        impl Eq for MyQ {
+        }
+
+        impl Borrow<MyQ> for Box<u32> {
+            #[verifier::external_body]
+            fn borrow(&self) -> &MyQ {
+                &MyQ
+            }
+        }
+
+        fn test(m: HashMap<Box<u32>, u32>, q: MyQ) {
+            assume(obeys_borrow_model::<Box<u32>, MyQ>());
+            let a = m.contains_key::<MyQ>(&q);
+            let b = m.contains_key::<MyQ>(&q);
+            assert(a == b);
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
     #[test] test_hash_map_struct verus_code! {
         use core::hash::{Hash, Hasher};
         use std::collections::HashMap;
