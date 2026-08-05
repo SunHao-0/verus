@@ -574,6 +574,9 @@ macro_rules! def_bop_assign_impls_signed_div_rem {
 };
 }
 
+// Rust considers a shift to overflow when the shift amount is negative or is at least the
+// bit width of the left-hand type, so the precondition is `0 <= rhs < BITS`, matching the
+// check Verus applies to the primitive `<<` and `>>` operators.
 // TODO: there are many more combinations of primitive integer types supported by Shl and Shr,
 // such as (Self = u8, Rhs = u64)
 macro_rules! def_bop_impls_shift {
@@ -583,7 +586,7 @@ macro_rules! def_bop_impls_shift {
                 $(
                     (
                         $typ,
-                        $rhs < $typ::BITS,
+                        0 <= $rhs && $rhs < $typ::BITS,
                         $self $op $rhs
                     )
                 )*
@@ -599,7 +602,7 @@ macro_rules! def_bop_assign_impls_shift {
                 $(
                     (
                         $typ,
-                        $rhs < $typ::BITS,
+                        0 <= $rhs && $rhs < $typ::BITS,
                         $self $op $rhs
                     )
                 )*

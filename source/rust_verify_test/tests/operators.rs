@@ -481,3 +481,82 @@ test_verify_one_file! {
         "div/mod on signed finite-width integers",
     ])
 }
+
+test_verify_one_file! {
+    #[test] test_shift_by_negative_amount_signed verus_code! {
+        use vstd::prelude::*;
+        use core::ops::{Shl, Shr, ShlAssign, ShrAssign};
+
+        fn test_shl(x: i16) {
+            let _ = x.shl(-1i16); // FAILS
+        }
+
+        fn test_shr(x: i16) {
+            let _ = x.shr(-1i16); // FAILS
+        }
+
+        fn test_shl_assign(x: i16) {
+            let mut y = x;
+            y.shl_assign(-1i16); // FAILS
+        }
+
+        fn test_shr_assign(x: i16) {
+            let mut y = x;
+            y.shr_assign(-1i16); // FAILS
+        }
+    } => Err(e) => assert_fails(e, 4)
+}
+
+test_verify_one_file! {
+    #[test] test_shift_upper_bound_alone_is_not_enough verus_code! {
+        use vstd::prelude::*;
+        use core::ops::Shl;
+
+        fn shift_left(x: i8, n: i8) -> (r: i8)
+            requires
+                n < i8::BITS,
+        {
+            Shl::<i8>::shl(x, n) // FAILS
+        }
+
+        fn test() {
+            let a = shift_left(1i8, -1i8);
+        }
+    } => Err(e) => assert_one_fails(e)
+}
+
+test_verify_one_file! {
+    #[test] test_shift_by_nonnegative_amount verus_code! {
+        use vstd::prelude::*;
+        use core::ops::{Shl, Shr, ShlAssign, ShrAssign};
+
+        fn test_signed(x: i16, n: i16)
+            requires
+                0 <= n < i16::BITS,
+        {
+            let _ = x.shl(n);
+            let _ = x.shr(n);
+            let mut y = x;
+            y.shl_assign(n);
+            let mut z = x;
+            z.shr_assign(n);
+        }
+
+        fn test_unsigned(x: u16, n: u16)
+            requires
+                n < u16::BITS,
+        {
+            let _ = x.shl(n);
+            let _ = x.shr(n);
+            let mut y = x;
+            y.shl_assign(n);
+            let mut z = x;
+            z.shr_assign(n);
+        }
+
+        fn test_signed_literal(x: i16) {
+            let _ = x.shl(0i16);
+            let _ = x.shr(15i16);
+        }
+    } => Ok(())
+}
