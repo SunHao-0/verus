@@ -888,11 +888,11 @@ test_verify_one_file! {
 
         fn test() {
             let mut s = String::new();
-            s.push('a');
-            s.push_str("bc");
             proof {
                 reveal_strlit("bc");
             }
+            s.push('a');
+            s.push_str("bc");
             assert(s@ == seq!['a', 'b', 'c']);
         }
     } => Ok(())
@@ -944,4 +944,246 @@ test_verify_one_file! {
             assert(!empty); // FAILS
         }
     } => Err(e) => assert_one_fails(e)
+}
+
+test_verify_one_file! {
+    #[test] string_concat_length_overflow verus_code! {
+        use vstd::prelude::*;
+        use vstd::string::*;
+
+        fn grow(s: String, n: usize) -> (r: String)
+            requires
+                s@.len() >= 1,
+            ensures
+                r@.len() >= s@.len() + n,
+            decreases n,
+        {
+            if n == 0 {
+                s
+            } else {
+                let other = s.clone();
+                let doubled = s.concat(other.as_str()); // FAILS
+                grow(doubled, n - 1)
+            }
+        }
+
+        fn boom(s: String)
+            requires
+                s@.len() >= 1,
+            ensures
+                false,
+        {
+            let t = grow(s, usize::MAX);
+            let n = t.as_str().unicode_len();
+            assert(n as nat == t@.len());
+        }
+
+        fn derive() {
+            let mut s = String::new();
+            s.push('a');
+            boom(s);
+            assert(false);
+        }
+    } => Err(e) => assert_one_fails(e)
+}
+
+test_verify_one_file! {
+    #[test] string_append_length_overflow verus_code! {
+        use vstd::prelude::*;
+        use vstd::string::*;
+
+        fn grow(s: &mut String, other: &str, n: usize)
+            requires
+                other@.len() >= 1,
+            ensures
+                final(s)@.len() >= old(s)@.len() + n,
+            decreases n,
+        {
+            if n > 0 {
+                s.append(other); // FAILS
+                grow(s, other, n - 1);
+            }
+        }
+
+        fn boom(s: &mut String, other: &str)
+            requires
+                old(s)@.len() >= 1,
+                other@.len() >= 1,
+            ensures
+                false,
+        {
+            grow(s, other, usize::MAX);
+            let n = s.as_str().unicode_len();
+            assert(n as nat == s@.len());
+        }
+
+        fn derive(other: &str)
+            requires
+                other@.len() >= 1,
+        {
+            let mut s = String::new();
+            s.push('a');
+            boom(&mut s, other);
+            assert(false);
+        }
+    } => Err(e) => assert_one_fails(e)
+}
+
+test_verify_one_file! {
+    #[test] string_push_str_length_overflow verus_code! {
+        use vstd::prelude::*;
+        use vstd::string::*;
+
+        fn grow(s: &mut String, other: &str, n: usize)
+            requires
+                other@.len() >= 1,
+            ensures
+                final(s)@.len() >= old(s)@.len() + n,
+            decreases n,
+        {
+            if n > 0 {
+                s.push_str(other); // FAILS
+                grow(s, other, n - 1);
+            }
+        }
+
+        fn boom(s: &mut String, other: &str)
+            requires
+                old(s)@.len() >= 1,
+                other@.len() >= 1,
+            ensures
+                false,
+        {
+            grow(s, other, usize::MAX);
+            let n = s.as_str().unicode_len();
+            assert(n as nat == s@.len());
+        }
+    } => Err(e) => assert_one_fails(e)
+}
+
+test_verify_one_file! {
+    #[test] string_push_length_overflow verus_code! {
+        use vstd::prelude::*;
+        use vstd::string::*;
+
+        fn grow(s: &mut String, n: usize)
+            ensures
+                final(s)@.len() >= old(s)@.len() + n,
+            decreases n,
+        {
+            if n > 0 {
+                s.push('a'); // FAILS
+                grow(s, n - 1);
+            }
+        }
+
+        fn boom(s: &mut String)
+            requires
+                old(s)@.len() >= 1,
+            ensures
+                false,
+        {
+            grow(s, usize::MAX);
+            let n = s.as_str().unicode_len();
+            assert(n as nat == s@.len());
+        }
+    } => Err(e) => assert_one_fails(e)
+}
+
+test_verify_one_file! {
+    #[test] string_growth_within_bounds verus_code! {
+        use vstd::prelude::*;
+        use vstd::string::*;
+
+        fn concat_when_there_is_room(a: String, b: &str) -> (r: Option<String>)
+            ensures
+                r is Some ==> r.unwrap()@ == a@ + b@,
+        {
+            let alen = a.as_str().len();
+            let blen = b.len();
+            if alen <= (isize::MAX as usize) - blen {
+                Some(a.concat(b))
+            } else {
+                None
+            }
+        }
+
+        fn copy(s: &str) -> (r: String)
+            ensures
+                r@ == s@,
+        {
+            String::from_str(s)
+        }
+
+        fn repeat(c: char, n: usize) -> (r: String)
+            requires
+                n <= 100,
+            ensures
+                r@.len() == n,
+        {
+            let mut s = String::new();
+            let mut i: usize = 0;
+            while i < n
+                invariant
+                    i <= n <= 100,
+                    s@.len() == i,
+                decreases n - i,
+            {
+                s.push(c);
+                i = i + 1;
+            }
+            s
+        }
+
+        fn literals() -> (r: String)
+            ensures
+                r@ == ("hello world")@,
+        {
+            proof {
+                reveal_strlit("hello world");
+                reveal_strlit("hello ");
+                reveal_strlit("world");
+            }
+            let mut s = ("hello ").to_owned();
+            s.append("world");
+            assert(s@ =~= ("hello world")@);
+            s
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] string_lengths_are_bounded verus_code! {
+        use vstd::prelude::*;
+        use vstd::string::*;
+
+        proof fn str_bytes_are_bounded(s: &str)
+            ensures
+                s.spec_bytes().len() <= isize::MAX,
+                s@.len() <= isize::MAX,
+        {
+        }
+
+        proof fn string_bytes_are_bounded(s: &String)
+            ensures
+                s.spec_bytes().len() <= isize::MAX,
+                s@.len() <= isize::MAX,
+        {
+        }
+
+        fn push_str_when_there_is_room(s: &mut String, other: &str) -> (r: bool)
+            ensures
+                r ==> final(s)@ == old(s)@ + other@,
+                !r ==> final(s)@ == old(s)@,
+        {
+            let slen = s.as_str().len();
+            let olen = other.len();
+            if slen <= (isize::MAX as usize) - olen {
+                s.push_str(other);
+                true
+            } else {
+                false
+            }
+        }
+    } => Ok(())
 }

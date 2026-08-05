@@ -490,6 +490,18 @@ pub broadcast proof fn encode_utf8_push(chars: Seq<char>, c: char)
     assert(encode_utf8(seq![c]) =~= encode_scalar(c as u32) + encode_utf8(Seq::<char>::empty()));
 }
 
+/// UTF-8 encodes each `char` with between 1 and 4 bytes, so the encoded byte
+/// length of a `char` sequence is bracketed by its `char` length.
+pub broadcast proof fn encode_utf8_len_bounds(chars: Seq<char>)
+    ensures
+        chars.len() <= #[trigger] encode_utf8(chars).len() <= 4 * chars.len(),
+    decreases chars.len(),
+{
+    if chars.len() != 0 {
+        encode_utf8_len_bounds(chars.drop_first());
+    }
+}
+
 /// Growing a prefix by at least one `char` strictly increases its encoded
 /// byte length.
 pub proof fn lemma_encode_utf8_len_strictly_monotonic(s: Seq<char>, i: int, j: int)
@@ -1169,6 +1181,7 @@ pub broadcast group group_utf8_lib {
     is_ascii_chars_concat,
     encode_utf8_concat,
     encode_utf8_push,
+    encode_utf8_len_bounds,
 }
 
 } // verus!

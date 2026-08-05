@@ -47,6 +47,17 @@ impl StringSliceAdditionalSpecFns for str {
     }
 }
 
+/// A `str` is one allocation, and no Rust allocation is larger than
+/// `isize::MAX` bytes[^1], so the byte length of a `str` is bounded.
+/// Together with [`encode_utf8_len_bounds`] this also bounds `s@.len()`.
+///
+/// [^1]: <https://doc.rust-lang.org/std/ptr/index.html#allocation>
+#[cfg(not(verus_verify_core))]
+pub broadcast axiom fn axiom_str_byte_len_bound(s: &str)
+    ensures
+        encode_utf8(#[trigger] s@).len() <= isize::MAX,
+;
+
 #[cfg(not(verus_verify_core))]
 pub open spec fn is_ascii(s: &str) -> bool {
     is_ascii_chars(s@)
@@ -288,17 +299,22 @@ pub broadcast axiom fn axiom_str_literal_get_char<'a>(s: &'a str, i: int)
 pub broadcast group group_string_axioms {
     axiom_str_literal_len,
     axiom_str_literal_get_char,
+    axiom_str_byte_len_bound,
     is_ascii_spec_bytes,
     is_ascii_concat,
+    super::utf8::encode_utf8_len_bounds,
 }
 
 #[cfg(all(feature = "alloc", not(verus_verify_core)))]
 pub broadcast group group_string_axioms {
     axiom_str_literal_len,
     axiom_str_literal_get_char,
+    axiom_str_byte_len_bound,
+    axiom_string_byte_len_bound,
     to_string_from_display_ensures_for_str,
     is_ascii_spec_bytes,
     is_ascii_concat,
+    super::utf8::encode_utf8_len_bounds,
 }
 
 #[cfg(all(feature = "alloc", not(verus_verify_core)))]
@@ -316,6 +332,20 @@ impl DeepView for String {
         self.view()
     }
 }
+
+#[cfg(all(feature = "alloc", not(verus_verify_core)))]
+impl StringSliceAdditionalSpecFns for String {
+    open spec fn spec_bytes(&self) -> Seq<u8> {
+        encode_utf8(self@)
+    }
+}
+
+/// The `String` counterpart of [`axiom_str_byte_len_bound`].
+#[cfg(all(feature = "alloc", not(verus_verify_core)))]
+pub broadcast axiom fn axiom_string_byte_len_bound(s: &String)
+    ensures
+        encode_utf8(#[trigger] s@).len() <= isize::MAX,
+;
 
 #[cfg(all(feature = "alloc", not(verus_verify_core)))]
 #[verifier::external_type_specification]
@@ -360,6 +390,8 @@ pub assume_specification[ String::new ]() -> (res: String)
 
 #[cfg(all(feature = "alloc", not(verus_verify_core)))]
 pub assume_specification[ String::push ](s: &mut String, c: char)
+    requires
+        old(s).spec_bytes().len() + c.len_utf8() <= isize::MAX,
     ensures
         final(s)@ == old(s)@.push(c),
 ;
@@ -373,6 +405,8 @@ pub assume_specification[ String::pop ](s: &mut String) -> (res: Option<char>)
 
 #[cfg(all(feature = "alloc", not(verus_verify_core)))]
 pub assume_specification[ String::push_str ](s: &mut String, other: &str)
+    requires
+        old(s).spec_bytes().len() + other.spec_bytes().len() <= isize::MAX,
     ensures
         final(s)@ == old(s)@ + other@,
 ;
@@ -434,6 +468,8 @@ impl StringExecFns for String {
 
     #[verifier::external_body]
     fn append<'a, 'b>(&'a mut self, other: &'b str)
+        requires
+            old(self).spec_bytes().len() + other.spec_bytes().len() <= isize::MAX,
         ensures
             final(self)@ == old(self)@ + other@,
     {
@@ -442,6 +478,8 @@ impl StringExecFns for String {
 
     #[verifier::external_body]
     fn concat<'b>(self, other: &'b str) -> (ret: String)
+        requires
+            self.spec_bytes().len() + other.spec_bytes().len() <= isize::MAX,
         ensures
             ret@ == self@ + other@,
     {
