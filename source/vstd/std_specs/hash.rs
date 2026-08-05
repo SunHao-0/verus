@@ -18,6 +18,15 @@
 //! the future, we plan to devise a way for you to prove that it does
 //! so, so that you don't have to make such an assumption.
 //!
+//! Relating a lookup by a borrowed key to `deep_view` additionally
+//! requires that the `Borrow` implementation agree with the key
+//! type's `DeepView` implementation and the borrowed type's `View`
+//! implementation, i.e., that borrowing a key preserve its deep view.
+//! We have axioms that borrowing a key as itself, borrowing a
+//! `Box<Q>` as a `Q`, and borrowing a `String` as a `str` do so; for
+//! any other pair you need to state your assumption that it does with
+//! `assume(vstd::std_specs::hash::obeys_deep_view_borrow_model::<MyKey, MyQ>());`.
+//!
 //! By default, the Verus standard library brings useful axioms
 //! about the behavior of `HashMap` and `HashSet` into the ambient
 //! reasoning context by broadcasting the group
@@ -530,8 +539,80 @@ pub broadcast proof fn lemma_hashmap_deepview_values<K: DeepView, V: DeepView>(m
     }
 }
 
-/// Borrowing a key works the same way on deep_view as on view,
-/// if deep_view is injective; see `axiom_contains_deref_key`.
+/// Specifies whether the `Borrow<Q>` implementation for a type `Key`
+/// agrees with `Key`'s `DeepView` implementation and `Q`'s `View`
+/// implementation, i.e., whether a `Key` borrows as a `Q` that the
+/// executable `==` operator considers equal to some `q: Q` exactly
+/// when `key.deep_view() == q@`. That's what makes looking a key up
+/// by a borrowed form of it agree with looking its deep view up in
+/// `deep_view()`.
+///
+/// The two requirements are (1) borrowing a `Key` as a `Q` preserves
+/// the deep view, i.e., `key.borrow()@ == key.deep_view()` for every
+/// `key: Key`, and (2) the executable `==` operator on `Q` considers
+/// two `Q`s equal if and only if their views are equal. Nothing checks
+/// either of them: `View` and `DeepView` are ordinary traits whose
+/// implementations have nothing to do with each other or with
+/// `Borrow`, and the bound `Q: View<V = <Key as DeepView>::V>` in
+/// `axiom_hashmap_deepview_borrow` only relates the two view *types*.
+///
+/// The standard library has axioms that a key borrowed as itself and
+/// a `Box<Q>` borrowed as a `Q` obey this model, given that view and
+/// deep view agree on the type being borrowed as, and that a `String`
+/// borrowed as a `str` obeys it. If you want to relate `deep_view` to
+/// a lookup of a key of some type `MyKey` by some other type `MyQ`,
+/// you need to explicitly state your assumption that it does so with
+/// `assume(vstd::std_specs::hash::obeys_deep_view_borrow_model::<MyKey, MyQ>())`.
+#[verifier::external_body]
+pub uninterp spec fn obeys_deep_view_borrow_model<Key: ?Sized, Q: ?Sized>() -> bool;
+
+// These axioms state that the `Borrow` implementations our hash table
+// model interprets -- borrowing a key as itself, borrowing a `Box<Q>`
+// as a `Q`, and borrowing a `String` as a `str` -- agree with
+// `DeepView`. In the first two cases the borrow is the identity on
+// the value, so requirement (1) is that view and deep view agree, and
+// the `==` operator on `Q` is the one `obeys_key_model::<Key>()`
+// makes identity, so requirement (2) is injectivity of the view,
+// which follows from injectivity of the deep view. In the `String`
+// case both requirements hold outright: `String`'s deep view is its
+// view, borrowing a `String` as a `str` preserves that view, and
+// `str`'s `==` is equality of the character sequence the view is.
+pub broadcast proof fn axiom_deref_key_obeys_deep_view_borrow_model<
+    Key: DeepView + View<V = <Key as DeepView>::V>,
+>()
+    requires
+        obeys_key_model::<Key>(),
+        forall|key: Key| #[trigger] key.deep_view() == key.view(),
+        crate::relations::injective(|key: Key| key.deep_view()),
+    ensures
+        #[trigger] obeys_deep_view_borrow_model::<Key, Key>(),
+{
+    admit();
+}
+
+pub broadcast proof fn axiom_box_key_obeys_deep_view_borrow_model<
+    Q: DeepView + View<V = <Q as DeepView>::V>,
+>()
+    requires
+        obeys_key_model::<Box<Q>>(),
+        forall|key: Box<Q>| #[trigger] key.deep_view() == key.view(),
+        crate::relations::injective(|key: Box<Q>| key.deep_view()),
+    ensures
+        #[trigger] obeys_deep_view_borrow_model::<Box<Q>, Q>(),
+{
+    admit();
+}
+
+pub broadcast proof fn axiom_string_key_obeys_deep_view_borrow_model()
+    ensures
+        #[trigger] obeys_deep_view_borrow_model::<String, str>(),
+{
+    admit();
+}
+
+/// Borrowing a key works the same way on deep_view as on view, if the
+/// `Borrow` implementation agrees with deep_view and deep_view is
+/// injective; see `axiom_contains_deref_key`.
 pub broadcast proof fn axiom_hashmap_deepview_borrow<
     K: DeepView + Borrow<Q>,
     V: DeepView,
@@ -539,6 +620,7 @@ pub broadcast proof fn axiom_hashmap_deepview_borrow<
 >(m: HashMap<K, V>, k: &Q)
     requires
         obeys_key_model::<K>(),
+        obeys_deep_view_borrow_model::<K, Q>(),
         crate::relations::injective(|k: K| k.deep_view()),
     ensures
         #[trigger] contains_borrowed_key(m@, k) <==> m.deep_view().contains_key(k@),
@@ -1416,6 +1498,9 @@ pub broadcast group group_hash_axioms {
     axiom_maps_deref_key_to_value,
     axiom_maps_box_key_to_value,
     axiom_hashmap_deepview_borrow,
+    axiom_deref_key_obeys_deep_view_borrow_model,
+    axiom_box_key_obeys_deep_view_borrow_model,
+    axiom_string_key_obeys_deep_view_borrow_model,
     axiom_bool_obeys_hash_table_key_model,
     axiom_u8_obeys_hash_table_key_model,
     axiom_u16_obeys_hash_table_key_model,

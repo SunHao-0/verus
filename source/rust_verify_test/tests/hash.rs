@@ -749,6 +749,239 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
+    #[test] test_hash_map_deepview_borrow_view_unrelated_to_deep_view_fails verus_code! {
+        use core::hash::{Hash, Hasher};
+        use std::collections::HashMap;
+        use vstd::prelude::*;
+        use vstd::std_specs::hash::*;
+
+        #[derive(PartialEq, Eq)]
+        pub struct MyKey(pub u8);
+
+        impl Hash for MyKey {
+            #[verifier::external_body]
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                self.0.hash(state)
+            }
+        }
+
+        impl DeepView for MyKey {
+            type V = u8;
+
+            open spec fn deep_view(&self) -> u8 {
+                self.0
+            }
+        }
+
+        impl View for MyKey {
+            type V = u8;
+
+            open spec fn view(&self) -> u8 {
+                5
+            }
+        }
+
+        proof fn test(m: HashMap<MyKey, u32>, k: MyKey)
+            requires
+                m@.contains_key(k),
+                forall|x: MyKey| m@.contains_key(x) ==> x.0 != 5,
+        {
+            assume(obeys_key_model::<MyKey>());
+            broadcast use lemma_hashmap_deepview_properties;
+            assert(contains_borrowed_key(m@, &k));
+            assert(!m.deep_view().contains_key(k@));
+            assert(false); // FAILS
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
+    #[test] test_hash_map_deepview_borrow_lawful_borrow_fails verus_code! {
+        use core::borrow::Borrow;
+        use core::hash::{Hash, Hasher};
+        use std::collections::HashMap;
+        use vstd::prelude::*;
+        use vstd::std_specs::hash::*;
+
+        #[derive(PartialEq, Eq)]
+        pub struct MyQ(pub u8);
+
+        impl Hash for MyQ {
+            #[verifier::external_body]
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                self.0.hash(state)
+            }
+        }
+
+        impl View for MyQ {
+            type V = u8;
+
+            open spec fn view(&self) -> u8 {
+                5
+            }
+        }
+
+        #[derive(PartialEq, Eq)]
+        pub struct MyKey(pub MyQ);
+
+        impl Hash for MyKey {
+            #[verifier::external_body]
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                self.0.hash(state)
+            }
+        }
+
+        impl DeepView for MyKey {
+            type V = u8;
+
+            open spec fn deep_view(&self) -> u8 {
+                self.0.0
+            }
+        }
+
+        impl Borrow<MyQ> for MyKey {
+            #[verifier::external_body]
+            fn borrow(&self) -> &MyQ {
+                &self.0
+            }
+        }
+
+        fn test(m: HashMap<MyKey, u32>, q: MyQ)
+            requires
+                m@.contains_key(MyKey(q)),
+                forall|x: MyKey| m@.contains_key(x) ==> x.0.0 != 5,
+        {
+            assume(obeys_key_model::<MyKey>());
+            proof {
+                broadcast use lemma_hashmap_deepview_properties;
+                assert(!m.deep_view().contains_key(5u8));
+            }
+            let found = m.contains_key::<MyQ>(&q);
+            assert(!found); // FAILS
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
+    #[test] test_hash_map_deepview_borrow_deref_key verus_code! {
+        use std::collections::HashMap;
+        use vstd::prelude::*;
+        use vstd::std_specs::hash::*;
+
+        proof fn test(m: HashMap<u64, u32>, k: u64)
+            requires
+                m@.contains_key(k),
+        {
+            assert(contains_borrowed_key(m@, &k));
+            assert(m.deep_view().contains_key(k@));
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] test_hash_map_deepview_borrow_box_key verus_code! {
+        use std::collections::HashMap;
+        use vstd::prelude::*;
+        use vstd::std_specs::hash::*;
+
+        fn test(m: HashMap<Box<u32>, u32>, k: u32)
+            requires
+                m@.contains_key(Box::new(k)),
+        {
+            let found = m.contains_key::<u32>(&k);
+            assert(found);
+            assert(m.deep_view().contains_key(k@));
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] test_hash_map_deepview_borrow_string_key verus_code! {
+        use std::collections::HashMap;
+        use vstd::prelude::*;
+        use vstd::relations::injective;
+        use vstd::std_specs::hash::*;
+
+        fn test(m: HashMap<String, u32>, k: &str)
+            requires
+                obeys_key_model::<String>(),
+                injective(|s: String| s.deep_view()),
+                m.deep_view().contains_key(k@),
+        {
+            let found = m.contains_key(k);
+            assert(found);
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] test_hash_map_deepview_borrow_assumed_model verus_code! {
+        use core::borrow::Borrow;
+        use core::hash::{Hash, Hasher};
+        use std::collections::HashMap;
+        use vstd::prelude::*;
+        use vstd::std_specs::hash::*;
+
+        #[derive(PartialEq, Eq)]
+        pub struct MyQ(pub u8);
+
+        impl Hash for MyQ {
+            #[verifier::external_body]
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                self.0.hash(state)
+            }
+        }
+
+        impl View for MyQ {
+            type V = u8;
+
+            open spec fn view(&self) -> u8 {
+                self.0
+            }
+        }
+
+        #[derive(PartialEq, Eq)]
+        pub struct MyKey(pub MyQ);
+
+        impl Hash for MyKey {
+            #[verifier::external_body]
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                self.0.hash(state)
+            }
+        }
+
+        impl DeepView for MyKey {
+            type V = u8;
+
+            open spec fn deep_view(&self) -> u8 {
+                self.0.0
+            }
+        }
+
+        impl Borrow<MyQ> for MyKey {
+            #[verifier::external_body]
+            fn borrow(&self) -> &MyQ {
+                &self.0
+            }
+        }
+
+        fn test(m: HashMap<MyKey, u32>, q: MyQ)
+            requires
+                m@.contains_key(MyKey(q)),
+        {
+            assume(obeys_key_model::<MyKey>());
+            assume(obeys_deep_view_borrow_model::<MyKey, MyQ>());
+            proof {
+                broadcast use lemma_hashmap_deepview_properties;
+                assert(m.deep_view().contains_key(q@));
+            }
+            let found = m.contains_key::<MyQ>(&q);
+            assert(found);
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
     #[test] test_string_hash_set verus_code! {
         use vstd::hash_set::StringHashSet;
         use vstd::prelude::*;
