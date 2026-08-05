@@ -57,22 +57,10 @@ pub assume_specification<T: Clone, A: Allocator + Clone>[ <Box<T, A> as Clone>::
         cloned::<T>(**b, *res),
 ;
 
-pub assume_specification<T, A: Allocator>[ Rc::<T, A>::try_unwrap ](v: Rc<T, A>) -> (result: Result<
-    T,
-    Rc<T, A>,
->)
-    ensures
-        match result {
-            Ok(t) => t == *v,
-            Err(e) => e == v,
-        },
-;
-
-pub assume_specification<T, A: Allocator>[ Rc::<T, A>::into_inner ](v: Rc<T, A>) -> (result: Option<
-    T,
->)
-    ensures
-        result matches Some(t) ==> t == *v,
-;
-
+// `Rc::try_unwrap`, `Rc::into_inner`, `Rc::get_mut` and their `Arc` counterparts hand out the
+// payload only when the strong count is 1. Verus encodes `Rc<T>` as a decoration of `T` and
+// compiles `<Rc<T> as Clone>::clone` to the identity, so an `Rc` and its clones are the same
+// term and no specification can separate a unique handle from a shared one. Anything that lets
+// the success arm be taken therefore extracts one payload per clone, which duplicates whatever
+// tracked state the payload carries. These stay unspecified until the strong count is modelled.
 } // verus!

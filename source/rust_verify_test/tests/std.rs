@@ -26,6 +26,95 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
+    #[test] rc_try_unwrap_duplicating_tracked_payload_is_rejected verus_code! {
+        use std::rc::Rc;
+        use vstd::prelude::*;
+        use vstd::simple_pptr::*;
+
+        fn test() {
+            let (_p, Tracked(pt)) = PPtr::<u8>::new(5u8);
+            let r1: Rc<Tracked<PointsTo<u8>>> = Rc::new(Tracked(pt));
+            let r2 = r1.clone();
+            match (Rc::try_unwrap(r1), Rc::try_unwrap(r2)) {
+                (Ok(a), Ok(b)) => {
+                    proof {
+                        let tracked mut x = a.get();
+                        let tracked y = b.get();
+                        x.is_distinct(&y);
+                    }
+                    assert(false);
+                },
+                _ => {},
+            }
+        }
+    } => Err(err) => assert_vir_error_msg(err, "is not supported (note: you may be able to add a Verus specification to this function with `assume_specification`)")
+}
+
+test_verify_one_file! {
+    #[test] rc_into_inner_duplicating_tracked_payload_is_rejected verus_code! {
+        use std::rc::Rc;
+        use vstd::prelude::*;
+        use vstd::simple_pptr::*;
+
+        fn test() {
+            let (_p, Tracked(pt)) = PPtr::<u8>::new(5u8);
+            let r1: Rc<Tracked<PointsTo<u8>>> = Rc::new(Tracked(pt));
+            let r2 = r1.clone();
+            match (Rc::into_inner(r1), Rc::into_inner(r2)) {
+                (Some(a), Some(b)) => {
+                    proof {
+                        let tracked mut x = a.get();
+                        let tracked y = b.get();
+                        x.is_distinct(&y);
+                    }
+                    assert(false);
+                },
+                _ => {},
+            }
+        }
+    } => Err(err) => assert_vir_error_msg(err, "is not supported (note: you may be able to add a Verus specification to this function with `assume_specification`)")
+}
+
+test_verify_one_file! {
+    #[test] smart_ptr_remaining_specs verus_code! {
+        use std::rc::Rc;
+        use std::sync::Arc;
+        use vstd::prelude::*;
+
+        fn test_new_and_deref() {
+            let b: Box<u8> = Box::new(5);
+            assert(*b == 5);
+
+            let r: Rc<u8> = Rc::new(5);
+            assert(*r == 5);
+
+            let a: Arc<u8> = Arc::new(5);
+            assert(*a == 5);
+        }
+
+        fn test_default() {
+            let r: Rc<bool> = Rc::default();
+            assert(*r == false);
+
+            let a: Arc<bool> = Arc::default();
+            assert(*a == false);
+        }
+
+        fn test_box_clone(b: Box<u8>) {
+            let c = b.clone();
+            assert(*b == *c);
+        }
+
+        fn test_into_vec(b: Box<[u8]>) -> (v: Vec<u8>)
+            ensures
+                v@ == b@,
+        {
+            b.into_vec()
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
     #[test] ref_clone verus_code! {
         struct X { }
 
