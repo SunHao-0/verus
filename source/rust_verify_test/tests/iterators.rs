@@ -481,3 +481,83 @@ test_verify_one_file! {
 
     } => Ok(())
 }
+
+const LAWLESS_COUNTDOWN: &str = verus_code_str! {
+    use vstd::prelude::*;
+    use vstd::std_specs::iter::*;
+
+    pub struct Countdown {
+        pub n: u8,
+    }
+
+    impl Iterator for Countdown {
+        type Item = u8;
+
+        fn next(&mut self) -> (r: Option<u8>) {
+            if self.n == 0 {
+                None
+            } else {
+                self.n = self.n - 1;
+                Some(self.n)
+            }
+        }
+    }
+
+    impl IteratorSpecImpl for Countdown {
+        open spec fn obeys_prophetic_iter_laws(&self) -> bool {
+            false
+        }
+
+        #[verifier::prophetic]
+        open spec fn remaining(&self) -> Seq<u8> {
+            Seq::empty()
+        }
+
+        #[verifier::prophetic]
+        open spec fn will_return_none(&self) -> bool {
+            false
+        }
+
+        open spec fn decrease(&self) -> Option<nat> {
+            None
+        }
+
+        open spec fn peek(&self, index: int) -> Option<u8> {
+            None
+        }
+    }
+};
+
+test_verify_one_file! {
+    #[test] collect_lawless_iterator_yields_nothing LAWLESS_COUNTDOWN.to_string() + verus_code_str! {
+        fn test() {
+            let it = Countdown { n: 3 };
+            let v: Vec<u8> = it.collect();
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] collect_lawless_will_return_none LAWLESS_COUNTDOWN.to_string() + verus_code_str! {
+        fn exploit() {
+            let it = Countdown { n: 3 };
+            let v: Vec<u8> = it.collect();
+            assert(false); // FAILS
+        }
+    } => Err(e) => assert_one_fails(e)
+}
+
+test_verify_one_file! {
+    #[test] collect_obeying_iterator_will_return_none verus_code! {
+        use vstd::prelude::*;
+        use vstd::std_specs::iter::IteratorSpec;
+
+        fn test(v: Vec<u8>) {
+            let it = v.into_iter();
+            let ghost it0 = it;
+            let w: Vec<u8> = it.collect();
+            assert(it0.will_return_none());
+            assert(w@ == v@);
+        }
+    } => Ok(())
+}

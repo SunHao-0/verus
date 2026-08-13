@@ -83,7 +83,10 @@ pub trait ExIterator {
             B: FromIterator<Self::Item>,
             Self: Sized,
         default_ensures
-            self.will_return_none(),
+            // `collect` drains the iterator, so returning at all means it ran out.
+            // Only `obeys_prophetic_iter_laws()` ties `will_return_none()` to that
+            // event; for an iterator that opts out, it is an arbitrary predicate.
+            self.obeys_prophetic_iter_laws() ==> self.will_return_none(),
             self.obeys_prophetic_iter_laws() ==>
                 FromIteratorSpec::from_iter_ensures(self.remaining(), collection),
     ;
