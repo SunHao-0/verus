@@ -119,6 +119,7 @@ fn test_basic() {
 
     for x in iter: vec_iter(&v)
         invariant
+            iter.seq().len() == v.len(),
             w.len() == iter.index(),
             forall |i| 0 <= i < w.len() ==> w@[i] == *iter.seq()[i],
     {
@@ -184,6 +185,7 @@ fn test_reversed(v: &Vec<u8>) -> (w: Vec<u8>)
     let mut w: Vec<u8> = Vec::new();
     for x in iter: v.iter().rev()
         invariant
+            iter.seq().len() == v.len(),
             w.len() == iter.index(),
             forall|i: int| 0 <= i < w.len() ==> w@[i] == *iter.seq()[i],
     {

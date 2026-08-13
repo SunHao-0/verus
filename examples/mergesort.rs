@@ -11,11 +11,13 @@ pub open spec fn is_sorted(v: &Vec<u64>) -> bool {
 fn extend_from_idx(r: &mut Vec<u64>, v: &Vec<u64>, start: usize)
     requires
         start < v.len(),
+        old(r)@.len() + (v@.len() - start) <= usize::MAX,
     ensures
         final(r)@ == old(r)@ + v@.subrange(start as int, v.len() as int),
 {
     for i in start..v.len()
         invariant
+            old(r)@.len() + (v@.len() - start) <= usize::MAX,
             r@ =~= old(r)@ + v@.subrange(start as int, i as int),
     {
         r.push(v[i]);
@@ -63,8 +65,10 @@ fn merge(v1: &Vec<u64>, v2: &Vec<u64>) -> (r: Vec<u64>)
     requires
         is_sorted(v1),
         is_sorted(v2),
+        v1@.len() + v2@.len() <= usize::MAX,
     ensures
         r@.to_multiset() == (v1@ + v2@).to_multiset(),
+        r@.len() == v1@.len() + v2@.len(),
         is_sorted(&r),
 {
     broadcast use lemma_to_multiset_distributes_over_add;
@@ -78,6 +82,7 @@ fn merge(v1: &Vec<u64>, v2: &Vec<u64>) -> (r: Vec<u64>)
         invariant
             0 <= i1 <= v1.len(),
             0 <= i2 <= v2.len(),
+            v1@.len() + v2@.len() <= usize::MAX,
             is_sorted(v1),
             is_sorted(v2),
             forall|i: int| i1 < v1.len() ==> 0 <= i < r.len() ==> r[i] <= v1[i1 as int],
@@ -87,6 +92,7 @@ fn merge(v1: &Vec<u64>, v2: &Vec<u64>) -> (r: Vec<u64>)
                 i2 as int,
             )).to_multiset(),
             is_sorted(&r),
+            r@.len() == i1 + i2,
         decreases v1.len() + v2.len() - i1 - i2,
     {
         proof {
@@ -147,6 +153,7 @@ fn merge(v1: &Vec<u64>, v2: &Vec<u64>) -> (r: Vec<u64>)
 fn merge_sort(v: &Vec<u64>) -> (r: Vec<u64>)
     ensures
         r@.to_multiset() == (*v)@.to_multiset(),
+        r@.len() == v@.len(),
         is_sorted(&r),
     decreases v.len(),
 {

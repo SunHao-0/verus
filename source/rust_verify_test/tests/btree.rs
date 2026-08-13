@@ -301,6 +301,7 @@ test_verify_one_file_with_options! {
             for k in iter: m_keys
                 invariant
                     g_keys == iter.seq(),
+                    iter.seq().len() == 2,
                     items@ == iter.seq().take(iter.index()).unref(),
             {
                 items.push(*k);
@@ -370,6 +371,7 @@ test_verify_one_file_with_options! {
             for v in iter: m_values
                 invariant
                     g_values == iter.seq(),
+                    iter.seq().len() == 2,
                     items@ == iter.seq().take(iter.index()).unref(),
             {
                 items.push(*v);
@@ -433,11 +435,16 @@ test_verify_one_file_with_options! {
             m.insert(6);
             let m_iter = m.iter();
             assert(m_iter.remaining().unref().to_set() =~= set![3u32, 6u32]);
+            assert(m_iter.remaining().len() == 2) by {
+                assert(m@ =~= set![3u32, 6u32]);
+                assert(set![3u32, 6u32].len() == 2);
+            }
 
             let mut items = Vec::<u32>::new();
 
             for k in iter: m_iter
                 invariant
+                    iter.seq().len() == 2,
                     iter.seq().unref().to_set() =~= set![3u32, 6u32],
                     items@ == iter.seq().take(iter.index()).unref(),
             {

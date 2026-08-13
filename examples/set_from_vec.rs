@@ -11,16 +11,24 @@ impl VecSet {
         self.vt@.to_set()
     }
 
+    pub closed spec fn spec_len(&self) -> nat {
+        self.vt@.len()
+    }
+
     pub fn new() -> (s: Self)
         ensures
             s@ =~= Set::<u64>::empty(),
+            s.spec_len() == 0,
     {
         VecSet { vt: Vec::new() }
     }
 
     pub fn insert(&mut self, v: u64)
+        requires
+            old(self).spec_len() < usize::MAX,
         ensures
             final(self)@ =~= old(self)@.insert(v),
+            final(self).spec_len() == old(self).spec_len() + 1,
     {
         self.vt.push(v);
         proof {

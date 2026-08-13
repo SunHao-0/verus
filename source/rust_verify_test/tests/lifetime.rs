@@ -1553,6 +1553,7 @@ test_verify_one_file! {
                 invariant
                     forall|v: V| #[trigger] f.requires((&v,)),
                     i <= v.len(),
+                    r@.len() <= i,
                     forall |v:V,r:bool| f.ensures((&v,), r) ==> f_spec(v) == r,
             {
                 let ghost pre_r = r@.to_multiset();

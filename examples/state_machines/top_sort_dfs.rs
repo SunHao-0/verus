@@ -6,6 +6,7 @@ use vstd::iset::*;
 use vstd::modes::*;
 use vstd::prelude::*;
 use vstd::seq::*;
+use vstd::set_lib::*;
 use vstd::slice::*;
 use vstd::{pervasive::*, prelude::*, *};
 
@@ -67,6 +68,8 @@ tokenized_state_machine!{
 
                 remove unvisited -= set { v };
                 add visited (union)= set { v };
+
+                assert(!pre.top_sort.contains(v));
 
                 update top_sort = pre.top_sort.push(v);
             }
@@ -201,6 +204,29 @@ struct DfsState {
     instance: Tracked<TopSort::Instance<usize>>,
 }
 
+proof fn lemma_no_dup_bounded_len(s: Seq<usize>, n: int)
+    requires
+        n >= 0,
+        s.no_duplicates(),
+        forall|j: int| 0 <= j < s.len() ==> s[j] < n,
+    ensures
+        s.len() <= n,
+{
+    let m = s.map_values(|x: usize| x as int);
+    assert(m.len() == s.len());
+    assert(m.no_duplicates()) by {
+        assert forall|i: int, j: int| 0 <= i < m.len() && 0 <= j < m.len() && i != j implies m[i]
+            != m[j] by {
+            assert(s[i] != s[j]);
+        }
+    }
+    m.unique_seq_to_set();
+    m.to_set_ensures();
+    assert(m.to_set().subset_of(set_int_range(0, n)));
+    lemma_len_subset(m.to_set(), set_int_range(0, n));
+    lemma_int_range(0, n);
+}
+
 spec fn valid_stack_i(cur_stack: Seq<usize>, graph: DirectedGraph<usize>, i: int) -> bool {
     graph.edges.contains((cur_stack[i], cur_stack[i + 1]))
 }
@@ -219,6 +245,14 @@ impl DfsState {
         &&& self.top_sort_token@.value() == self.top_sort@
         &&& self.instance@.graph() == graph@
         &&& valid_stack(self.cur_stack@, graph@)
+        &&& self.cur_stack@.no_duplicates()
+        &&& forall|j: int|
+            0 <= j < self.cur_stack@.len() ==> #[trigger] self.cur_stack@[j]
+                < self.node_states@.len()
+        &&& self.top_sort@.no_duplicates()
+        &&& forall|j: int|
+            0 <= j < self.top_sort@.len() ==> #[trigger] self.top_sort@[j]
+                < self.node_states@.len()
         &&& forall|i: usize|
             0 <= i < self.node_states@.len() ==> (self.node_states@[i as int].in_stack
                 <==> self.cur_stack@.contains(i))
@@ -324,6 +358,25 @@ fn visit(graph: &ConcreteDirectedGraph, dfs_state: &mut DfsState, v: usize) -> (
         NodeToken::Unvisited(unvisited) => unvisited,
         _ => proof_from_false(),
     };
+    proof {
+        assert(!dfs_state.cur_stack@.contains(v));
+        assert(dfs_state.cur_stack@.push(v).no_duplicates()) by {
+            assert forall|i: int, j: int|
+                0 <= i < j < dfs_state.cur_stack@.push(v).len() implies dfs_state.cur_stack@.push(
+                v,
+            )[i] != dfs_state.cur_stack@.push(v)[j] by {
+                if j < dfs_state.cur_stack@.len() {
+                    assert(dfs_state.cur_stack@[i] != dfs_state.cur_stack@[j]);
+                } else {
+                    assert(dfs_state.cur_stack@.contains(dfs_state.cur_stack@[i]));
+                }
+            }
+        }
+        lemma_no_dup_bounded_len(
+            dfs_state.cur_stack@.push(v),
+            dfs_state.node_states@.len() as int,
+        );
+    }
     dfs_state.cur_stack.push(v);
     assert(dfs_state.well_formed(graph)) by {
         assert(forall|i: int|
@@ -404,6 +457,23 @@ fn visit(graph: &ConcreteDirectedGraph, dfs_state: &mut DfsState, v: usize) -> (
         &map_visited_deps,
         dfs_state.top_sort_token.borrow_mut(),
     );
+    proof {
+        assert(dfs_state.top_sort@.push(v).no_duplicates()) by {
+            assert forall|i: int, j: int|
+                0 <= i < j < dfs_state.top_sort@.push(v).len() implies dfs_state.top_sort@.push(v)[i]
+                != dfs_state.top_sort@.push(v)[j] by {
+                if j < dfs_state.top_sort@.len() {
+                    assert(dfs_state.top_sort@[i] != dfs_state.top_sort@[j]);
+                } else {
+                    assert(dfs_state.top_sort@.contains(dfs_state.top_sort@[i]));
+                }
+            }
+        }
+        lemma_no_dup_bounded_len(
+            dfs_state.top_sort@.push(v),
+            dfs_state.node_states@.len() as int,
+        );
+    }
     dfs_state.top_sort.push(v);
     let mut node_state_tmp = NodeState {
         in_stack: false,  // TODO don't need to write this field again

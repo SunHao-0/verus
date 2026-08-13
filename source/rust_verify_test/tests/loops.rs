@@ -1148,6 +1148,7 @@ test_verify_one_file! {
 
             for x in y: v
                 invariant
+                    y.seq().len() == v.len(),
                     w@ == y.history(),
             {
                 w.push(x);
@@ -1681,6 +1682,7 @@ test_verify_one_file! {
 
             for x in iter: v.iter().rev()
                 invariant
+                    iter.seq().len() == v.len(),
                     w.len() == iter.index(),
                     forall |i| 0 <= i < w.len() ==> w[i] == iter.seq()[i],
             {
@@ -1804,6 +1806,7 @@ test_verify_one_file! {
           let mut w: Vec<u32> = Vec::new();
           for x in it: vd.iter().rev()
               invariant
+                  it.seq().len() == vd.len(),
                   w.len() == it.index(),
                   forall |i| 0 <= i < w.len() ==> w[i] == *it.seq()[i],
           {

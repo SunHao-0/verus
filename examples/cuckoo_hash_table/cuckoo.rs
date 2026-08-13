@@ -1069,6 +1069,7 @@ impl MyHashMap {
         #[verifier::allow_complex_invariants]
         loop
             invariant path.len() > 0,
+                path.len() + i <= HEIGHT + 1,
                 forall |i: int| 0 <= i && i+1 < path.len() ==> places_ok(path@, i),
                 0 <= path[path.len() - 1].row < HEIGHT,
                 0 <= path[path.len() - 1].col < WIDTH,

@@ -116,6 +116,7 @@ impl View for Stack {
 
 impl Stack {
     fn push(&mut self, val: u64)
+        requires old(self)@.len() < usize::MAX,
         ensures final(self)@ == old(self)@.push(val),
     {
         self.data.push(val);

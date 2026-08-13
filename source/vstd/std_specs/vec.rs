@@ -139,6 +139,8 @@ pub assume_specification<T, A: Allocator>[ Vec::<T, A>::try_reserve ](
 ;
 
 pub assume_specification<T, A: Allocator>[ Vec::<T, A>::push ](vec: &mut Vec<T, A>, value: T)
+    requires
+        old(vec)@.len() < usize::MAX,
     ensures
         final(vec)@ == old(vec)@.push(value),
 ;
@@ -155,6 +157,8 @@ pub assume_specification<T, A: Allocator>[ Vec::<T, A>::append ](
     vec: &mut Vec<T, A>,
     other: &mut Vec<T, A>,
 )
+    requires
+        old(vec)@.len() + old(other)@.len() <= usize::MAX,
     ensures
         final(vec)@ == old(vec)@ + old(other)@,
         final(other)@ == Seq::<T>::empty(),
@@ -164,6 +168,8 @@ pub assume_specification<T: core::clone::Clone, A: Allocator>[ Vec::<T, A>::exte
     vec: &mut Vec<T, A>,
     other: &[T],
 )
+    requires
+        old(vec)@.len() + other@.len() <= usize::MAX,
     ensures
         final(vec)@.len() == old(vec)@.len() + other@.len(),
         forall|i: int|
@@ -207,6 +213,7 @@ pub assume_specification<T, A: Allocator>[ Vec::<T, A>::insert ](
 )
     requires
         i <= old(vec).len(),
+        old(vec)@.len() < usize::MAX,
     ensures
         final(vec)@ == old(vec)@.insert(i as int, element),
 ;

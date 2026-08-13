@@ -66,3 +66,130 @@ test_verify_one_file! {
         }
     } => Ok(())
 }
+
+test_verify_one_file! {
+    #[test] vec_push_length_overflow verus_code! {
+        use vstd::prelude::*;
+
+        fn fill_to_max() -> (v: Vec<()>)
+            ensures
+                v@.len() == usize::MAX,
+        {
+            vec![(); usize::MAX]
+        }
+
+        fn overflow(v: &mut Vec<()>)
+            requires
+                old(v)@.len() == usize::MAX,
+            ensures
+                false,
+        {
+            v.push(()); // FAILS
+            let n = v.len();
+            assert(n == v@.len());
+        }
+
+        fn derive() {
+            let mut v = fill_to_max();
+            overflow(&mut v);
+            assert(false);
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
+    #[test] vec_insert_length_overflow verus_code! {
+        use vstd::prelude::*;
+
+        fn overflow(v: &mut Vec<()>)
+            requires
+                old(v)@.len() == usize::MAX,
+            ensures
+                false,
+        {
+            v.insert(0, ()); // FAILS
+            let n = v.len();
+            assert(n == v@.len());
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
+    #[test] vec_append_length_overflow verus_code! {
+        use vstd::prelude::*;
+
+        fn overflow(v: &mut Vec<()>, other: &mut Vec<()>)
+            requires
+                old(v)@.len() == usize::MAX,
+                old(other)@.len() == 1,
+            ensures
+                false,
+        {
+            v.append(other); // FAILS
+            let n = v.len();
+            assert(n == v@.len());
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
+    #[test] vec_extend_from_slice_length_overflow verus_code! {
+        use vstd::prelude::*;
+
+        fn overflow(v: &mut Vec<()>, other: &[()])
+            requires
+                old(v)@.len() == usize::MAX,
+                other@.len() == 1,
+            ensures
+                false,
+        {
+            v.extend_from_slice(other); // FAILS
+            let n = v.len();
+            assert(n == v@.len());
+        }
+    } => Err(err) => assert_one_fails(err)
+}
+
+test_verify_one_file! {
+    #[test] vec_growth_within_bounds verus_code! {
+        use vstd::prelude::*;
+
+        fn push_when_there_is_room(v: &mut Vec<u32>, x: u32)
+            requires
+                old(v)@.len() < usize::MAX,
+            ensures
+                final(v)@ == old(v)@.push(x),
+        {
+            v.push(x);
+        }
+
+        fn extend_when_there_is_room(v: &mut Vec<u32>, other: &[u32])
+            requires
+                old(v)@.len() + other@.len() <= usize::MAX,
+            ensures
+                final(v)@.len() == old(v)@.len() + other@.len(),
+        {
+            v.extend_from_slice(other);
+        }
+
+        fn copy_slice(src: &[u32]) -> (dst: Vec<u32>)
+            ensures
+                dst@ == src@,
+        {
+            let mut dst: Vec<u32> = Vec::new();
+            let mut i: usize = 0;
+            while i < src.len()
+                invariant
+                    i <= src@.len(),
+                    dst@ == src@.take(i as int),
+                decreases src@.len() - i,
+            {
+                dst.push(src[i]);
+                assert(src@.take(i + 1) =~= src@.take(i as int).push(src@[i as int]));
+                i = i + 1;
+            }
+            assert(src@.take(src@.len() as int) =~= src@);
+            dst
+        }
+    } => Ok(())
+}

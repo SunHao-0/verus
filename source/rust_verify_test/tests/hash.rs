@@ -825,10 +825,15 @@ test_verify_one_file_with_options! {
             m.insert(3, 4);
             m.insert(6, -8);
             let m_keys = m.keys();
+            assert(m_keys.remaining().len() == 2) by {
+                assert(m@.dom() =~= set![3u32, 6u32]);
+                assert(set![3u32, 6u32].len() == 2);
+            }
 
             let mut items = Vec::<u32>::new();
             for k in iter: m_keys
                 invariant
+                    iter.seq().len() == 2,
                     items@ == iter.seq().take(iter.index()).unref(),
             {
                 items.push(*k);
@@ -862,9 +867,14 @@ test_verify_one_file_with_options! {
                 assert(m@.values() =~= set![4i8, -8i8]);
             };
             let m_values = m.values();
+            assert(m_values.remaining().len() == 2) by {
+                assert(m@.dom() =~= set![3u32, 6u32]);
+                assert(set![3u32, 6u32].len() == 2);
+            }
             let mut items = Vec::<i8>::new();
             for v in iter: m_values
                 invariant
+                    iter.seq().len() == 2,
                     items@ == iter.seq().take(iter.index()).unref(),
             {
                 items.push(*v);
@@ -923,11 +933,16 @@ test_verify_one_file_with_options! {
             m.insert(6);
             let m_iter = m.iter();
             assert(m_iter.remaining().unref().to_set() =~= set![3u32, 6u32]);
+            assert(m_iter.remaining().len() == 2) by {
+                assert(m@ =~= set![3u32, 6u32]);
+                assert(set![3u32, 6u32].len() == 2);
+            }
 
             let mut items = Vec::<u32>::new();
 
             for k in iter: m_iter
                 invariant
+                    iter.seq().len() == 2,
                     iter.seq().unref().to_set() =~= set![3u32, 6u32],
                     items@ == iter.seq().take(iter.index()).unref(),
             {

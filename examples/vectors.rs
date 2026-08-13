@@ -133,6 +133,7 @@ fn pop_test(t: Vec<u64>)
 
 fn push_test(t: Vec<u64>, y: u64)
     requires
+        t.len() < usize::MAX,
         forall|i: int| #![auto] 0 <= i < t.len() ==> uninterp_fn(t[i]),
         uninterp_fn(y),
 {
