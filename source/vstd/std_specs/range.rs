@@ -125,6 +125,26 @@ impl<A: core::iter::Step> super::iter::IteratorSpecImpl for Range<A> {
     }
 }
 
+/// Number of items a [`RangeInclusive`] has left to yield.
+///
+/// An inclusive range cannot record exhaustion by advancing an endpoint, since
+/// it still has to yield `start` when `start == end`. std yields that last item
+/// and sets a private `exhausted` flag instead, leaving both endpoints where
+/// they were, so the endpoints alone do not say whether the range is spent;
+/// [`RangeInclusiveView::exhausted`] has to be consulted as well.
+pub open spec fn range_inclusive_len<A: core::iter::Step>(range: &RangeInclusive<A>) -> nat {
+    if range@.exhausted {
+        0
+    } else {
+        let len = range@.start.spec_steps_between_int(range@.end) + 1;
+        if len > 0 {
+            len as nat
+        } else {
+            0
+        }
+    }
+}
+
 impl<A: core::iter::Step> super::iter::IteratorSpecImpl for RangeInclusive<A> {
     open spec fn obeys_prophetic_iter_laws(&self) -> bool {
         true
@@ -132,7 +152,7 @@ impl<A: core::iter::Step> super::iter::IteratorSpecImpl for RangeInclusive<A> {
 
     open spec fn remaining(&self) -> Seq<Self::Item> {
         Seq::new(
-            (self@.start.spec_steps_between_int(self@.end) + 1) as nat,
+            range_inclusive_len(self),
             |i: int| self@.start.spec_forward_checked_int(i).unwrap(),
         )
     }
@@ -140,7 +160,7 @@ impl<A: core::iter::Step> super::iter::IteratorSpecImpl for RangeInclusive<A> {
     uninterp spec fn will_return_none(&self) -> bool;
 
     open spec fn decrease(&self) -> Option<nat> {
-        Some((self@.start.spec_steps_between_int(self@.end) + 1) as nat)
+        Some(range_inclusive_len(self))
     }
 
     open spec fn peek(&self, index: int) -> Option<Self::Item> {
@@ -274,7 +294,11 @@ pub assume_specification<'s, T>[ <RangeInclusive<T> as RangeBounds<T>>::end_boun
     range: &'s RangeInclusive<T>,
 ) -> (result: Bound<&'s T>)
     ensures
-        spec_bound(result) == SpecBound::Included(&range@.end),
+        spec_bound(result) == if range@.exhausted {
+            SpecBound::Excluded(&range@.end)
+        } else {
+            SpecBound::Included(&range@.end)
+        },
 ;
 
 pub assume_specification<'s, T>[ <RangeToInclusive<T> as RangeBounds<T>>::start_bound ](
@@ -371,7 +395,11 @@ impl<T> RangeBoundsSpecImpl<T> for RangeInclusive<T> {
     }
 
     open spec fn spec_end_bound(&self) -> SpecBound<&T> {
-        SpecBound::Included(&self@.end)
+        if self@.exhausted {
+            SpecBound::Excluded(&self@.end)
+        } else {
+            SpecBound::Included(&self@.end)
+        }
     }
 }
 

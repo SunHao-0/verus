@@ -81,6 +81,78 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
+    #[test] range_inclusive_end_bound_before_iteration verus_code! {
+        use vstd::prelude::*;
+        use vstd::std_specs::range::{spec_bound, SpecBound};
+        use core::ops::RangeBounds;
+
+        fn test()
+        {
+            let range = 3u8..=7u8;
+            assert(range@.start == 3 && range@.end == 7 && !range@.exhausted);
+            let sb = range.start_bound();
+            let eb = range.end_bound();
+            assert(spec_bound(sb) == SpecBound::Included(&range@.start));
+            assert(spec_bound(eb) == SpecBound::Included(&range@.end));
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] range_inclusive_end_bound_after_exhaustion verus_code! {
+        use vstd::prelude::*;
+        use core::ops::{Bound, RangeBounds};
+
+        fn test()
+        {
+            let mut range = 0u8..=1u8;
+            let a = range.next();
+            let b = range.next();
+            let c = range.next();
+            assert(a == Some(0u8) && b == Some(1u8) && c is None);
+            let eb = range.end_bound();
+            match eb {
+                Bound::Included(_) => {}
+                _ => {
+                    assert(false); // FAILS
+                }
+            }
+        }
+    } => Err(e) => assert_one_fails(e)
+}
+
+test_verify_one_file! {
+    #[test] range_inclusive_exhausted_keeps_its_endpoints verus_code! {
+        use vstd::prelude::*;
+        use vstd::std_specs::iter::IteratorSpec;
+
+        fn test()
+        {
+            let mut range = 0u8..=1u8;
+            let a = range.next();
+            let b = range.next();
+            assert(IteratorSpec::remaining(&range).len() == 0);
+            assert(range@.end < range@.start); // FAILS
+        }
+    } => Err(e) => assert_one_fails(e)
+}
+
+test_verify_one_file! {
+    #[test] range_inclusive_backwards_is_empty verus_code! {
+        use vstd::prelude::*;
+        use vstd::std_specs::iter::IteratorSpec;
+
+        fn test()
+        {
+            let mut range = 5u8..=3u8;
+            assert(IteratorSpec::remaining(&range).len() == 0);
+            let r = range.next();
+            assert(r is None);
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
     #[test] collect_works verus_code! {
         use vstd::prelude::*;
 
